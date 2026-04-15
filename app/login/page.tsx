@@ -3,8 +3,8 @@
 import { supabase } from "@/lib/supabaseClient"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { useEffect } from "react"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -22,7 +22,7 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: 'https://ryugekka-admin-unmr.vercel.app/admin/dashboard'
+        redirectTo: `${window.location.origin}/admin/dashboard`
       }
     })
     if (error) console.error("Login error:", error)
