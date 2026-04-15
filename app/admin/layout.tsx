@@ -1,12 +1,41 @@
 "use client"
 
 import { supabase } from "@/lib/supabaseClient"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import { useEffect, useState } from "react"
-import { Button } from "@/components/ui/button"
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+} from "@/components/ui/sidebar"
+import {
+  LayoutDashboard,
+  Users,
+  MessageSquare,
+  Mic,
+  Calendar,
+  Settings,
+  LogOut,
+} from "lucide-react"
+
+const menuItems = [
+  { title: "ダッシュボード", url: "/admin/dashboard", icon: LayoutDashboard },
+  { title: "鑑定履歴", url: "/admin/consultations", icon: MessageSquare },
+  { title: "ユーザー一覧", url: "/admin/users", icon: Users },
+  { title: "フォローメール", url: "/admin/follow-mails", icon: Mic },
+  { title: "つぶやき管理", url: "/admin/whispers", icon: Calendar },
+  { title: "設定", url: "/admin/settings", icon: Settings },
+]
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
+  const pathname = usePathname()
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -26,18 +55,53 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return () => subscription.unsubscribe()
   }, [router])
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    router.push("/login")
+  }
+
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center">読み込み中...</div>
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        読み込み中...
+      </div>
+    )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="flex">
-        {/* サイドバー（後で追加） */}
+    <SidebarProvider>
+      <div className="flex min-h-screen w-full">
+        <Sidebar>
+          <SidebarContent>
+            <SidebarGroup>
+              <SidebarGroupLabel>龍月花 管理画面</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {menuItems.map((item) => (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton asChild isActive={pathname === item.url}>
+                        <a href={item.url}>
+                          <item.icon />
+                          <span>{item.title}</span>
+                        </a>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                  <SidebarMenuItem>
+                    <SidebarMenuButton onClick={handleLogout}>
+                      <LogOut />
+                      <span>ログアウト</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </SidebarContent>
+        </Sidebar>
         <main className="flex-1 p-6">
           {children}
         </main>
       </div>
-    </div>
+    </SidebarProvider>
   )
 }

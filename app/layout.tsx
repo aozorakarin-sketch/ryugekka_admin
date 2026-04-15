@@ -31,3 +31,14 @@ export default function RootLayout({
     </html>
   );
 }
+import { TooltipProvider } from "@/components/ui/tooltip"
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="ja" suppressHydrationWarning>
+      <body>
+        <TooltipProvider>{children}</TooltipProvider>
+      </body>
+    </html>
+  )
+}
