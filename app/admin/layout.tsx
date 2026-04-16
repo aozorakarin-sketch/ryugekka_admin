@@ -13,6 +13,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
+  SidebarTrigger,  // ← 追加
 } from "@/components/ui/sidebar"
 import {
   LayoutDashboard,
@@ -99,6 +100,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </SidebarContent>
         </Sidebar>
         <main className="flex-1 p-6">
+          {/* スマホ用ハンバーガーボタン */}
+          <div className="md:hidden mb-4">
+            <SidebarTrigger />
+          </div>
           {children}
         </main>
       </div>
