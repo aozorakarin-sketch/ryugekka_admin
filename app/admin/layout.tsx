@@ -45,15 +45,24 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname()
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) {
-        router.push("/login")
-      } else if (!ALLOWED_EMAILS.includes(session.user.email ?? '')) {
-        router.push("/unauthorized")
-      }
-      setLoading(false)
-    })
+ useEffect(() => {
+  supabase.auth.getUser().then(({ data: { user } }) => {
+    if (!user) {
+      router.push("/login")
+    } else if (!ALLOWED_EMAILS.includes(user.email ?? '')) {
+      router.push("/unauthorized")
+    }
+    setLoading(false)
+  })
+
+  const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    if (_event === 'SIGNED_OUT') {
+      router.push("/login")
+    }
+  })
+
+  return () => subscription.unsubscribe()
+}, [router])
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!session) {
