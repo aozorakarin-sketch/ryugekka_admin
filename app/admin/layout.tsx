@@ -3,33 +3,10 @@
 import { supabase } from "@/lib/supabaseClient"
 import { useRouter, usePathname } from "next/navigation"
 import { useEffect, useState } from "react"
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarProvider,
-  SidebarTrigger,
-} from "@/components/ui/sidebar"
-import {
-  LayoutDashboard,
-  Users,
-  MessageSquare,
-  Mic,
-  Calendar,
-  Settings,
-  LogOut,
-} from "lucide-react"
+import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
+import { LayoutDashboard, Users, MessageSquare, Mic, Calendar, Settings, LogOut } from "lucide-react"
 
-const ALLOWED_EMAILS = [
-  'bazvideo412@gmail.com',
-  'tomo517ko@gmail.com',
-  'aozora.karin@gmail.com',
-]
+const ALLOWED_EMAILS = ['bazvideo412@gmail.com', 'tomo517ko@gmail.com', 'aozora.karin@gmail.com']
 
 const menuItems = [
   { title: "ダッシュボード", url: "/admin/dashboard", icon: LayoutDashboard },
@@ -55,7 +32,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       setLoading(false)
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event) => {
       if (_event === 'SIGNED_OUT') {
         router.push("/login")
       }
@@ -70,11 +47,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        読み込み中...
-      </div>
-    )
+    return <div className="min-h-screen flex items-center justify-center">読み込み中...</div>
   }
 
   return (
