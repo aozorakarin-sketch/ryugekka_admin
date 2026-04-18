@@ -13,7 +13,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
-  SidebarTrigger,  // ← 追加
+  SidebarTrigger,
 } from "@/components/ui/sidebar"
 import {
   LayoutDashboard,
@@ -24,6 +24,12 @@ import {
   Settings,
   LogOut,
 } from "lucide-react"
+
+const ALLOWED_EMAILS = [
+  'bazvideo412@gmail.com',
+  'tomo517ko@gmail.com',
+  'aozora.karin@gmail.com',
+]
 
 const menuItems = [
   { title: "ダッシュボード", url: "/admin/dashboard", icon: LayoutDashboard },
@@ -43,6 +49,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) {
         router.push("/login")
+      } else if (!ALLOWED_EMAILS.includes(session.user.email ?? '')) {
+        router.push("/unauthorized")
       }
       setLoading(false)
     })
@@ -100,7 +108,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </SidebarContent>
         </Sidebar>
         <main className="flex-1 p-6">
-          {/* スマホ用ハンバーガーボタン */}
           <div className="md:hidden mb-4">
             <SidebarTrigger />
           </div>
