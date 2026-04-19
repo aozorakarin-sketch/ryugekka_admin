@@ -124,9 +124,9 @@ export default function FollowMailNewPage() {
   <div className="flex items-center justify-between mb-1">
     <label className="text-xs text-gray-500">テンプレート</label>
     
-      href="/admin/mail-templates"
-      className="text-xs bg-teal-500 hover:bg-teal-600 text-white px-2 py-0.5 rounded"
-    >
+href="/admin/mail-templates"
+  className="text-xs bg-teal-500 hover:bg-teal-600 text-white px-2 py-0.5 rounded"
+>
       テンプレート管理
     </a>
   </div>
