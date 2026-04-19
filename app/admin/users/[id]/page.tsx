@@ -131,6 +131,11 @@ type Memo = {
   partner: string
 }
 
+type UserProfile = {
+  birth_date: string
+  gender: string
+}
+
 export default function UserDetailPage() {
   const { id } = useParams()
   const [handleName, setHandleName] = useState("")
@@ -139,8 +144,10 @@ export default function UserDetailPage() {
     id: null, memo: "", category: "", category_child: "",
     worry_status: "", marriage: "", child: "", work: "", salary: "", partner: ""
   })
+  const [profile, setProfile] = useState<UserProfile>({ birth_date: "", gender: "" })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [savingProfile, setSavingProfile] = useState(false)
 
   useEffect(() => {
     fetchAll()
@@ -164,14 +171,14 @@ export default function UserDetailPage() {
       recording_url: c.call_recordings?.[0]?.recording_url ?? null,
     })))
 
-    const { data: memoData } = await supabase
+    const { data: memoDataList } = await supabase
       .from("teacher_memos")
       .select("*")
       .eq("user_id", id)
       .eq("teacher_id", MINDEN_TEACHER_ID)
       .order("created_at", { ascending: false })
       .limit(1)
-      .single()
+    const memoData = memoDataList?.[0] ?? null
     if (memoData) {
       setMemo({
         id: memoData.id,
@@ -184,6 +191,18 @@ export default function UserDetailPage() {
         work: memoData.work ?? "",
         salary: memoData.salary ?? "",
         partner: memoData.partner ?? "",
+      })
+    }
+
+    const { data: profileData } = await supabase
+      .from("user_profiles")
+      .select("birth_date, gender")
+      .eq("user_id", id)
+      .single()
+    if (profileData) {
+      setProfile({
+        birth_date: profileData.birth_date ?? "",
+        gender: profileData.gender ?? "",
       })
     }
 
@@ -225,6 +244,31 @@ export default function UserDetailPage() {
     fetchAll()
   }
 
+  const saveProfile = async () => {
+    setSavingProfile(true)
+    const { data: existing } = await supabase
+      .from("user_profiles")
+      .select("user_id")
+      .eq("user_id", id)
+      .single()
+
+    if (existing) {
+      await supabase.from("user_profiles").update({
+        birth_date: profile.birth_date || null,
+        gender: profile.gender || null,
+        updated_at: new Date().toISOString(),
+      }).eq("user_id", id)
+    } else {
+      await supabase.from("user_profiles").insert({
+        user_id: id,
+        birth_date: profile.birth_date || null,
+        gender: profile.gender || null,
+        data_source: "minden",
+      })
+    }
+    setSavingProfile(false)
+  }
+
   const totalMinutes = consultations.reduce((s, c) => s + (c.call_duration ?? 0), 0)
   const avgMinutes = consultations.length > 0 ? (totalMinutes / consultations.length).toFixed(1) : "0"
   const firstAt = consultations.length > 0 ? consultations[consultations.length - 1].started_at : null
@@ -257,6 +301,45 @@ export default function UserDetailPage() {
                 <div className="flex justify-between"><span>初回日時</span><span className="text-xs">{formatDate(firstAt)}</span></div>
               </div>
             </div>
+
+            <div className="bg-purple-50 rounded p-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="font-medium text-purple-800">プロフィール</div>
+                <button
+                  onClick={saveProfile}
+                  disabled={savingProfile}
+                  className="text-xs bg-purple-500 hover:bg-purple-600 text-white px-2 py-0.5 rounded"
+                >
+                  {savingProfile ? "保存中..." : "保存"}
+                </button>
+              </div>
+              <div className="space-y-2 text-sm">
+                <div>
+                  <label className="text-xs text-gray-500">誕生日</label>
+                  <input
+                    type="date"
+                    className="w-full border rounded px-2 py-1 mt-1 text-xs bg-white"
+                    value={profile.birth_date}
+                    onChange={e => setProfile({...profile, birth_date: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500">性別</label>
+                  <select
+                    className="w-full border rounded px-2 py-1 mt-1 text-xs bg-white"
+                    value={profile.gender}
+                    onChange={e => setProfile({...profile, gender: e.target.value})}
+                  >
+                    <option value="">-</option>
+                    <option value="女性">女性</option>
+                    <option value="男性">男性</option>
+                    <option value="その他">その他</option>
+                    <option value="回答しない">回答しない</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
             <div className="bg-yellow-50 rounded p-3">
               <div className="font-medium text-yellow-800 mb-2">フォローメール</div>
               <div className="flex justify-between text-gray-700"><span>送信数</span><span>-件</span></div>
@@ -370,11 +453,11 @@ export default function UserDetailPage() {
           <div>
             <label className="text-xs text-gray-500">メモ</label>
             <textarea
-  className="w-full border rounded px-2 py-1 mt-1 text-sm"
-  style={{ height: "600px" }}
-  value={memo.memo}
-  onChange={e => setMemo({...memo, memo: e.target.value})}
-/>
+              className="w-full border rounded px-2 py-1 mt-1 text-sm"
+              style={{ height: "600px" }}
+              value={memo.memo}
+              onChange={e => setMemo({...memo, memo: e.target.value})}
+            />
           </div>
         </div>
       </div>
