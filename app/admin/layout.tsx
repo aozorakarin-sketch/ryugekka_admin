@@ -4,8 +4,7 @@ import { supabase } from "@/lib/supabaseClient"
 import { useRouter, usePathname } from "next/navigation"
 import { useEffect, useState } from "react"
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
-import { LayoutDashboard, Users, MessageSquare, Mic, Calendar, Settings, LogOut, Star } from "lucide-react"
-
+import { LayoutDashboard, Users, MessageSquare, Mic, Calendar, Settings, LogOut, Star, FileText } from "lucide-react"
 const ALLOWED_EMAILS = ['bazvideo412@gmail.com', 'tomo517ko@gmail.com', 'aozora.karin@gmail.com']
 
 const menuItems = [
@@ -13,8 +12,10 @@ const menuItems = [
   { title: "鑑定履歴", url: "/admin/consultations", icon: MessageSquare },
   { title: "ユーザー一覧", url: "/admin/users", icon: Users },
   { title: "フォローメール", url: "/admin/follow-mails", icon: Mic },
+  { title: "フォローメール下書き", url: "/admin/follow-mails/drafts", icon: FileText },
   { title: "つぶやき管理", url: "/admin/whispers", icon: Calendar },
   { title: "レビュー", url: "/admin/reviews", icon: Star },
+  { title: "レビュー下書き", url: "/admin/reviews/drafts", icon: FileText },
   { title: "設定", url: "/admin/settings", icon: Settings },
 ]
 
