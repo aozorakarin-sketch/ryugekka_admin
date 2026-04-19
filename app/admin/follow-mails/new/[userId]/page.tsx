@@ -123,7 +123,8 @@ export default function FollowMailNewPage() {
         </div>
 
         <div>
-          <label className="text-xs text-gray-500">テンプレート</label>
+         <label className="text-xs text-gray-500">テンプレート</label>
+            <a href="/admin/mail-templates" className="text-xs text-teal-600 hover:underline">テンプレート管理 →</a>
           <select
             className="w-full border rounded px-2 py-1 mt-1 text-sm bg-white"
             value={selectedTemplateId}
