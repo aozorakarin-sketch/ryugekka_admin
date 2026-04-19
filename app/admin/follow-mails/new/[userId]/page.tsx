@@ -120,15 +120,17 @@ export default function FollowMailNewPage() {
       <div className="border rounded-lg p-4 bg-white space-y-4">
         <div className="text-sm text-gray-600">
           送信先：<span className="font-medium text-gray-900">{handleName}</span>
-        </div>
-
-        <div>
-         <div className="flex items-center justify-between">
-  <label className="text-xs text-gray-500">テンプレート</label>
-  <a href="/admin/mail-templates" className="text-xs text-teal-600 hover:underline">テンプレート管理 →</a>
-</div>
-            <a href="/admin/mail-templates" className="text-xs text-teal-600 hover:underline">テンプレート管理 →</a>
-          <select
+       <div>
+  <div className="flex items-center justify-between mb-1">
+    <label className="text-xs text-gray-500">テンプレート</label>
+    
+      href="/admin/mail-templates"
+      className="text-xs bg-teal-500 hover:bg-teal-600 text-white px-2 py-0.5 rounded"
+    >
+      テンプレート管理
+    </a>
+  </div>
+  <select
             className="w-full border rounded px-2 py-1 mt-1 text-sm bg-white"
             value={selectedTemplateId}
             onChange={e => handleTemplateChange(e.target.value)}
