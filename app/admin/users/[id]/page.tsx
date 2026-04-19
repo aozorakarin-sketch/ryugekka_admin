@@ -146,6 +146,9 @@ export default function UserDetailPage() {
   })
   const [profile, setProfile] = useState<UserProfile>({ birth_date: "", gender: "" })
   const [followMailCount, setFollowMailCount] = useState(0)
+  const [followMailLastAt, setFollowMailLastAt] = useState<string | null>(null)
+  const [reviewCount, setReviewCount] = useState(0)
+  const [reviewLastAt, setReviewLastAt] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [savingProfile, setSavingProfile] = useState(false)
@@ -207,12 +210,24 @@ export default function UserDetailPage() {
       })
     }
 
-    const { count } = await supabase
+    const { count: fCount, data: fData } = await supabase
       .from("follow_mails")
-      .select("*", { count: "exact", head: true })
+      .select("sent_at", { count: "exact" })
       .eq("user_id", id)
       .eq("is_draft", false)
-    setFollowMailCount(count ?? 0)
+      .order("sent_at", { ascending: false })
+      .limit(1)
+    setFollowMailCount(fCount ?? 0)
+    setFollowMailLastAt(fData?.[0]?.sent_at ?? null)
+
+    const { count: rCount, data: rData } = await supabase
+      .from("reviews")
+      .select("created_at", { count: "exact" })
+      .eq("user_id", id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+    setReviewCount(rCount ?? 0)
+    setReviewLastAt(rData?.[0]?.created_at ?? null)
 
     setLoading(false)
   }
@@ -351,19 +366,26 @@ export default function UserDetailPage() {
             <div className="bg-yellow-50 rounded p-3">
               <div className="flex items-center justify-between mb-2">
                 <div className="font-medium text-yellow-800">フォローメール</div>
-<a
-                  href={`/admin/follow-mails/new/${id}`}
-                  className="text-xs bg-yellow-500 hover:bg-yellow-600 text-white px-2 py-0.5 rounded"
-                >
-                  作成
-                </a>
+                <div className="flex gap-1">
+                  <a href={`/admin/follow-mails/user/${id}`} className="text-xs bg-yellow-400 hover:bg-yellow-500 text-white px-2 py-0.5 rounded">一覧</a>
+                  <a href={`/admin/follow-mails/new/${id}`} className="text-xs bg-yellow-500 hover:bg-yellow-600 text-white px-2 py-0.5 rounded">作成</a>
+                </div>
               </div>
-              <div className="flex justify-between text-gray-700"><span>送信数</span><span>{followMailCount}件</span></div>
+              <div className="space-y-1 text-gray-700">
+                <div className="flex justify-between"><span>送信数</span><span>{followMailCount}件</span></div>
+                <div className="flex justify-between"><span>最終日時</span><span className="text-xs">{formatDate(followMailLastAt)}</span></div>
+              </div>
             </div>
 
             <div className="bg-blue-50 rounded p-3">
-              <div className="font-medium text-blue-800 mb-2">レビュー</div>
-              <div className="flex justify-between text-gray-700"><span>送信回数</span><span>-件</span></div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="font-medium text-blue-800">レビュー</div>
+                <a href={`/admin/reviews/user/${id}`} className="text-xs bg-blue-500 hover:bg-blue-600 text-white px-2 py-0.5 rounded">一覧</a>
+              </div>
+              <div className="space-y-1 text-gray-700">
+                <div className="flex justify-between"><span>件数</span><span>{reviewCount}件</span></div>
+                <div className="flex justify-between"><span>最終日時</span><span className="text-xs">{formatDate(reviewLastAt)}</span></div>
+              </div>
             </div>
           </div>
         </div>
