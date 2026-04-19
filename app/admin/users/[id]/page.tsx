@@ -145,6 +145,7 @@ export default function UserDetailPage() {
     worry_status: "", marriage: "", child: "", work: "", salary: "", partner: ""
   })
   const [profile, setProfile] = useState<UserProfile>({ birth_date: "", gender: "" })
+  const [followMailCount, setFollowMailCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [savingProfile, setSavingProfile] = useState(false)
@@ -205,6 +206,13 @@ export default function UserDetailPage() {
         gender: profileData.gender ?? "",
       })
     }
+
+    const { count } = await supabase
+      .from("follow_mails")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", id)
+      .eq("is_draft", false)
+    setFollowMailCount(count ?? 0)
 
     setLoading(false)
   }
@@ -341,9 +349,18 @@ export default function UserDetailPage() {
             </div>
 
             <div className="bg-yellow-50 rounded p-3">
-              <div className="font-medium text-yellow-800 mb-2">フォローメール</div>
-              <div className="flex justify-between text-gray-700"><span>送信数</span><span>-件</span></div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="font-medium text-yellow-800">フォローメール</div>
+<a
+                  href={`/admin/follow-mails/new/${id}`}
+                  className="text-xs bg-yellow-500 hover:bg-yellow-600 text-white px-2 py-0.5 rounded"
+                >
+                  作成
+                </a>
+              </div>
+              <div className="flex justify-between text-gray-700"><span>送信数</span><span>{followMailCount}件</span></div>
             </div>
+
             <div className="bg-blue-50 rounded p-3">
               <div className="font-medium text-blue-800 mb-2">レビュー</div>
               <div className="flex justify-between text-gray-700"><span>送信回数</span><span>-件</span></div>
