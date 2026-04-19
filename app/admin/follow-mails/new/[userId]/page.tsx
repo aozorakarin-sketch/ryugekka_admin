@@ -33,14 +33,12 @@ export default function FollowMailNewPage() {
   }, [userId])
 
   const fetchAll = async () => {
-    // ログイン中のユーザーを取得
     const { data: { user } } = await supabase.auth.getUser()
     if (!user?.email) return
     const t = EMAIL_TO_TEACHER[user.email]
     if (!t) return
     setTeacher(t)
 
-    // ユーザー名取得
     const { data: userData } = await supabase
       .from("users")
       .select("handle_name")
@@ -48,7 +46,6 @@ export default function FollowMailNewPage() {
       .single()
     setHandleName(userData?.handle_name ?? "-")
 
-    // テンプレート取得（ログイン中の先生のもの）
     const { data: templateData } = await supabase
       .from("mail_templates")
       .select("id, title, body")
@@ -56,7 +53,6 @@ export default function FollowMailNewPage() {
       .order("created_at", { ascending: false })
     setTemplates(templateData ?? [])
 
-    // 下書きがあれば取得
     const { data: draftData } = await supabase
       .from("follow_mails")
       .select("id, content")
@@ -116,22 +112,22 @@ export default function FollowMailNewPage() {
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <h1 className="text-xl font-bold mb-4">フォローメール作成</h1>
-
       <div className="border rounded-lg p-4 bg-white space-y-4">
         <div className="text-sm text-gray-600">
           送信先：<span className="font-medium text-gray-900">{handleName}</span>
-       <div>
-  <div className="flex items-center justify-between mb-1">
-    <label className="text-xs text-gray-500">テンプレート</label>
-    
-href="/admin/mail-templates"
-  className="text-xs bg-teal-500 hover:bg-teal-600 text-white px-2 py-0.5 rounded"
->
-      テンプレート管理
-    </a>
-  </div>
-  <select
-            className="w-full border rounded px-2 py-1 mt-1 text-sm bg-white"
+        </div>
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-xs text-gray-500">テンプレート</label>
+            <span
+              onClick={() => window.open('/admin/mail-templates', '_blank')}
+              className="text-xs text-teal-600 hover:underline cursor-pointer"
+            >
+              テンプレート管理 →
+            </span>
+          </div>
+          <select
+            className="w-full border rounded px-2 py-1 text-sm bg-white"
             value={selectedTemplateId}
             onChange={e => handleTemplateChange(e.target.value)}
           >
@@ -141,14 +137,12 @@ href="/admin/mail-templates"
             ))}
           </select>
         </div>
-
         <div>
           <label className="text-xs text-gray-500">件名</label>
           <div className="w-full border rounded px-2 py-2 mt-1 text-sm bg-gray-50 text-gray-700">
             {subject}
           </div>
         </div>
-
         <div>
           <label className="text-xs text-gray-500">本文</label>
           <textarea
@@ -159,7 +153,6 @@ href="/admin/mail-templates"
             placeholder="本文を入力してください"
           />
         </div>
-
         <div className="flex justify-between">
           <a href={`/admin/users/${userId}`} className="text-sm text-gray-500 hover:underline">
             ← 戻る
