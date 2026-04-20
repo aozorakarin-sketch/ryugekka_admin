@@ -6,10 +6,12 @@ import { useEffect, useState } from "react"
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { LayoutDashboard, Users, MessageSquare, Mic, Calendar, CalendarDays, Settings, LogOut, Star, FileText } from "lucide-react"
 import { Phone } from "lucide-react"
+import { Bell } from "lucide-react"
 const ALLOWED_EMAILS = ['bazvideo412@gmail.com', 'tomo517ko@gmail.com', 'aozora.karin@gmail.com']
 
 const menuItems = [
   { title: "ダッシュボード", url: "/admin/dashboard", icon: LayoutDashboard },
+  { title: "お知らせ", url: "/admin/announcements", icon: Bell },
   { title: "鑑定履歴", url: "/admin/consultations", icon: MessageSquare },
   { title: "ユーザー一覧", url: "/admin/users", icon: Users },
   { title: "フォローメール", url: "/admin/follow-mails", icon: Mic },
