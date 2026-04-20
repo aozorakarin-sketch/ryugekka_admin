@@ -99,15 +99,14 @@ export default function CallPage() {
       const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" })
       clientRef.current = client
 
-      client.on("user-published", async (user: any, mediaType: string) => {
-        await client.subscribe(user, mediaType)
-        if (mediaType === "audio") {
-          user.audioTrack.play()
-          setStatus("connected")
-          startTimer()
-        }
-      })
-
+client.on("user-published", async (user: any, mediaType: "audio" | "video") => {
+  await client.subscribe(user, mediaType)
+  if (mediaType === "audio") {
+    user.audioTrack.play()
+    setStatus("connected")
+    startTimer()
+  }
+})
       await client.join(APP_ID, teacher.channel, token, null)
       const localTrack = await AgoraRTC.createMicrophoneAudioTrack()
       localTrackRef.current = localTrack
