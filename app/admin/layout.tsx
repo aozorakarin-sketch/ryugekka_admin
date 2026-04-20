@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "next/navigation"
 import { useEffect, useState } from "react"
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { LayoutDashboard, Users, MessageSquare, Mic, Calendar, CalendarDays, Settings, LogOut, Star, FileText } from "lucide-react"
+import { Phone } from "lucide-react"
 const ALLOWED_EMAILS = ['bazvideo412@gmail.com', 'tomo517ko@gmail.com', 'aozora.karin@gmail.com']
 
 const menuItems = [
@@ -21,6 +22,7 @@ const menuItems = [
   { title: "ブログ管理", url: "/admin/blog", icon: FileText },
   { title: "待機列管理", url: "/admin/waiting", icon: Users },
   { title: "設定", url: "/admin/settings", icon: Settings },
+  { title: "通話", url: "/admin/call", icon: Phone },
 ]
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
