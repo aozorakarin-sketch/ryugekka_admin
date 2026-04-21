@@ -27,6 +27,8 @@ export default function CallPage() {
   const [recordings, setRecordings] = useState<Recording[]>([])
   const [uploading, setUploading] = useState(false)
   const [playingId, setPlayingId] = useState<string | null>(null)
+  const [waitingCount, setWaitingCount] = useState(0)
+  const [currentQueueId, setCurrentQueueId] = useState<string | null>(null)
 
   const clientRef = useRef<any>(null)
   const localTrackRef = useRef<any>(null)
@@ -47,7 +49,54 @@ export default function CallPage() {
     if (t) {
       setTeacher(t)
       fetchRecordings(t.id)
+      fetchWaitingCount(t.id)
     }
+  }
+
+  const fetchWaitingCount = async (teacherId: string) => {
+    const { count } = await supabase
+      .from("waiting_queue")
+      .select("*", { count: "exact", head: true })
+      .eq("teacher_id", teacherId)
+      .eq("status", "waiting")
+    setWaitingCount(count ?? 0)
+  }
+
+  // 通話開始時：先頭の待機レコードをin_callに更新
+  const markQueueInCall = async (teacherId: string) => {
+    const { data } = await supabase
+      .from("waiting_queue")
+      .select("id")
+      .eq("teacher_id", teacherId)
+      .eq("status", "waiting")
+      .order("requested_at", { ascending: true })
+      .limit(1)
+      .single()
+
+    if (data?.id) {
+      await supabase
+        .from("waiting_queue")
+        .update({
+          status: "in_call",
+          call_started_at: new Date().toISOString(),
+        })
+        .eq("id", data.id)
+      setCurrentQueueId(data.id)
+    }
+  }
+
+  // 通話終了時：in_callレコードをcompletedに更新
+  const markQueueCompleted = async () => {
+    if (!currentQueueId) return
+    await supabase
+      .from("waiting_queue")
+      .update({
+        status: "completed",
+        call_ended_at: new Date().toISOString(),
+      })
+      .eq("id", currentQueueId)
+    setCurrentQueueId(null)
+    if (teacher) fetchWaitingCount(teacher.id)
   }
 
   const fetchRecordings = async (teacherId: string) => {
@@ -99,14 +148,17 @@ export default function CallPage() {
       const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" })
       clientRef.current = client
 
-client.on("user-published", async (user: any, mediaType: "audio" | "video") => {
-  await client.subscribe(user, mediaType)
-  if (mediaType === "audio") {
-    user.audioTrack.play()
-    setStatus("connected")
-    startTimer()
-  }
-})
+      client.on("user-published", async (user: any, mediaType: "audio" | "video") => {
+        await client.subscribe(user, mediaType)
+        if (mediaType === "audio") {
+          user.audioTrack.play()
+          setStatus("connected")
+          startTimer()
+          // 待機列を in_call に更新
+          await markQueueInCall(teacher.id)
+        }
+      })
+
       await client.join(APP_ID, teacher.channel, token, null)
       const localTrack = await AgoraRTC.createMicrophoneAudioTrack()
       localTrackRef.current = localTrack
@@ -131,6 +183,9 @@ client.on("user-published", async (user: any, mediaType: "audio" | "video") => {
   const endCall = async () => {
     const duration = callTime
     stopTimer()
+
+    // 待機列を completed に更新
+    await markQueueCompleted()
 
     if (recorderRef.current && recorderRef.current.state !== "inactive") {
       recorderRef.current.stop()
@@ -213,7 +268,14 @@ client.on("user-published", async (user: any, mediaType: "audio" | "video") => {
 
   return (
     <div className="p-4 max-w-2xl">
-      <h1 className="text-xl font-bold mb-6">通話</h1>
+      <h1 className="text-xl font-bold mb-2">通話</h1>
+
+      {/* 待機人数表示 */}
+      {waitingCount > 0 && (
+        <div className="mb-4 px-4 py-2 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">
+          現在 <span className="font-bold">{waitingCount}人</span> が待機中です
+        </div>
+      )}
 
       <div className="bg-white border rounded-2xl p-8 text-center shadow-sm mb-6">
         <div className="w-20 h-20 rounded-full bg-teal-100 flex items-center justify-center text-3xl mx-auto mb-4">🔮</div>
@@ -276,3 +338,4 @@ client.on("user-published", async (user: any, mediaType: "audio" | "video") => {
     </div>
   )
 }
+
