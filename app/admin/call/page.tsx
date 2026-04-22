@@ -11,13 +11,6 @@ const EMAIL_TO_TEACHER: Record<string, { id: string; name: string; channel: stri
   "bazvideo412@gmail.com": { id: "3ba85bb9-9065-461b-b76b-cc488d4c0c3b", name: "雲龍蓮", channel: "renren" },
 }
 
-type Recording = {
-  id: string
-  recording_url: string
-  created_at: string
-  recording_duration: number
-}
-
 type WaitingEntry = {
   id: string
   user_id: string
@@ -26,11 +19,11 @@ type WaitingEntry = {
   agora_channel: string
 }
 
-type Toast = {
-  id: number
-  message: string
-  waitingEntryId: string
-  userId: string
+type Recording = {
+  id: string
+  recording_url: string
+  created_at: string
+  recording_duration: number
 }
 
 export default function CallPage() {
@@ -45,8 +38,8 @@ export default function CallPage() {
   const [waitingCount, setWaitingCount] = useState(0)
   const [waitingList, setWaitingList] = useState<WaitingEntry[]>([])
   const [currentQueueId, setCurrentQueueId] = useState<string | null>(null)
-  const [toasts, setToasts] = useState<Toast[]>([])
-  const toastIdRef = useRef(0)
+  const [callingEntryId, setCallingEntryId] = useState<string | null>(null)
+  const [toasts, setToasts] = useState<string[]>([])
 
   const clientRef = useRef<any>(null)
   const localTrackRef = useRef<any>(null)
@@ -54,12 +47,12 @@ export default function CallPage() {
   const chunksRef = useRef<Blob[]>([])
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
-  const notificationRef = useRef<HTMLAudioElement | null>(null)
+  const callRingRef = useRef<HTMLAudioElement | null>(null)
   const teacherRef = useRef<{ id: string; name: string; channel: string } | null>(null)
 
   useEffect(() => {
     initTeacher()
-    return () => { stopTimer() }
+    return () => { stopTimer(); stopCallRing() }
   }, [])
 
   const initTeacher = async () => {
@@ -75,66 +68,63 @@ export default function CallPage() {
     }
   }
 
-  // ---- 通知音を鳴らす ----
+  // ---- 通知音 ----
   const playNotification = () => {
     try {
       const audio = new Audio("/sounds/notification.mp3")
       audio.play().catch(err => console.error("通知音エラー:", err))
-      notificationRef.current = audio
     } catch (err) {
       console.error("通知音エラー:", err)
     }
   }
 
-  // ---- トースト表示 ----
-  const addToast = (message: string, waitingEntryId: string, userId: string) => {
-    const id = ++toastIdRef.current
-    setToasts(prev => [...prev, { id, message, waitingEntryId, userId }])
-    // 30秒後に自動削除
+  // ---- 呼び出し音（占い師側） ----
+  const playCallRing = () => {
+    const audio = new Audio("/sounds/call_ring.mp3")
+    audio.loop = true
+    audio.play().catch(err => console.error("呼び出し音エラー:", err))
+    callRingRef.current = audio
+  }
+
+  const stopCallRing = () => {
+    if (callRingRef.current) {
+      callRingRef.current.pause()
+      callRingRef.current.currentTime = 0
+      callRingRef.current = null
+    }
+  }
+
+  // ---- トースト（通知のみ） ----
+  const addToast = (message: string) => {
+    setToasts(prev => [...prev, message])
     setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id))
-    }, 30000)
+      setToasts(prev => prev.slice(1))
+    }, 5000)
   }
 
-  const removeToast = (id: number) => {
-    setToasts(prev => prev.filter(t => t.id !== id))
-  }
-
-  // ---- Supabase Realtime 購読 ----
+  // ---- Supabase Realtime ----
   const subscribeWaitingQueue = (teacherId: string) => {
-    const channel = supabase
+    supabase
       .channel("admin_waiting_queue")
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "waiting_queue",
-          filter: `teacher_id=eq.${teacherId}`,
-        },
-        (payload) => {
-          // 新しいお客様が来た！
-          playNotification()
-          const entry = payload.new as WaitingEntry
-          addToast("📞 新しいお客様が来ました！", entry.id, entry.user_id)
-          fetchWaitingList(teacherId)
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "waiting_queue",
-          filter: `teacher_id=eq.${teacherId}`,
-        },
-        () => {
-          fetchWaitingList(teacherId)
-        }
-      )
+      .on("postgres_changes", {
+        event: "INSERT",
+        schema: "public",
+        table: "waiting_queue",
+        filter: `teacher_id=eq.${teacherId}`,
+      }, (payload) => {
+        playNotification()
+        addToast("📞 新しいお客様が来ました！")
+        fetchWaitingList(teacherId)
+      })
+      .on("postgres_changes", {
+        event: "UPDATE",
+        schema: "public",
+        table: "waiting_queue",
+        filter: `teacher_id=eq.${teacherId}`,
+      }, () => {
+        fetchWaitingList(teacherId)
+      })
       .subscribe()
-
-    return channel
   }
 
   const fetchWaitingList = async (teacherId: string) => {
@@ -148,55 +138,97 @@ export default function CallPage() {
     setWaitingCount(data?.length ?? 0)
   }
 
-  // ---- 待機開始（お客様に着信音を鳴らす） ----
-  const startWaiting = async (entryId: string, toastId?: number) => {
+  // ---- 通話開始（占い師が押す） ----
+  const startCallToCustomer = async (entryId: string) => {
+    // waiting_queue を calling に更新 → お客様に着信音が鳴る
     await supabase
       .from("waiting_queue")
       .update({ status: "calling" })
       .eq("id", entryId)
 
-    // トーストを閉じる
-    if (toastId !== undefined) removeToast(toastId)
+    setCallingEntryId(entryId)
 
-    // 待機リスト更新
-    if (teacherRef.current) fetchWaitingList(teacherRef.current.id)
-  }
+    // 占い師に呼び出し音を鳴らす
+    playCallRing()
 
-  const fetchWaitingCount = async (teacherId: string) => {
-    const { count } = await supabase
-      .from("waiting_queue")
-      .select("*", { count: "exact", head: true })
-      .eq("teacher_id", teacherId)
-      .eq("status", "waiting")
-    setWaitingCount(count ?? 0)
-  }
+    // 占い師側もAgora接続開始
+    if (!teacherRef.current) return
+    try {
+      setStatus("calling")
+      const AgoraRTC = (await import("agora-rtc-sdk-ng")).default
+      const token = await getToken(teacherRef.current.channel)
+      const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" })
+      clientRef.current = client
 
-  const markQueueInCall = async (teacherId: string) => {
-    const { data } = await supabase
-      .from("waiting_queue")
-      .select("id")
-      .eq("teacher_id", teacherId)
-      .eq("status", "in_call")
-      .order("requested_at", { ascending: true })
-      .limit(1)
-      .single()
+      client.on("user-published", async (user: any, mediaType: "audio" | "video") => {
+        await client.subscribe(user, mediaType)
+        if (mediaType === "audio") {
+          user.audioTrack.play()
+          setStatus("connected")
+          startTimer()
+          stopCallRing()
+          setCurrentQueueId(entryId)
+        }
+      })
 
-    if (data?.id) {
-      setCurrentQueueId(data.id)
+      client.on("user-left", async () => {
+        await endCall()
+      })
+
+      await client.join(APP_ID, teacherRef.current.channel, token, null)
+      const localTrack = await AgoraRTC.createMicrophoneAudioTrack()
+      localTrackRef.current = localTrack
+      await client.publish([localTrack])
+
+      const stream = new MediaStream([localTrack.getMediaStreamTrack()])
+      const recorder = new MediaRecorder(stream)
+      chunksRef.current = []
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data) }
+      recorder.start()
+      recorderRef.current = recorder
+
+    } catch (err: any) {
+      console.error(err)
+      setStatus("idle")
+      stopCallRing()
+      alert("通話開始エラー: " + err.message)
     }
   }
 
-  const markQueueCompleted = async () => {
-    if (!currentQueueId) return
-    await supabase
-      .from("waiting_queue")
-      .update({
-        status: "completed",
-        call_ended_at: new Date().toISOString(),
-      })
-      .eq("id", currentQueueId)
-    setCurrentQueueId(null)
-    if (teacher) fetchWaitingList(teacher.id)
+  const endCall = async () => {
+    const duration = callTime
+    stopTimer()
+    stopCallRing()
+
+    if (recorderRef.current && recorderRef.current.state !== "inactive") {
+      recorderRef.current.stop()
+      recorderRef.current.onstop = async () => {
+        const blob = new Blob(chunksRef.current, { type: "audio/webm" })
+        await uploadRecording(blob, duration)
+      }
+    }
+
+    if (localTrackRef.current) { localTrackRef.current.close(); localTrackRef.current = null }
+    if (clientRef.current) { await clientRef.current.leave(); clientRef.current = null }
+
+    if (currentQueueId) {
+      await supabase
+        .from("waiting_queue")
+        .update({
+          status: "completed",
+          call_ended_at: new Date().toISOString(),
+        })
+        .eq("id", currentQueueId)
+      setCurrentQueueId(null)
+    }
+
+    if (callingEntryId) setCallingEntryId(null)
+
+    setStatus("idle")
+    setCallTime(0)
+    setMuted(false)
+
+    if (teacherRef.current) fetchWaitingList(teacherRef.current.id)
   }
 
   const fetchRecordings = async (teacherId: string) => {
@@ -245,66 +277,6 @@ export default function CallPage() {
     return `${Math.floor(diff / 60)}分前`
   }
 
-  const startCall = async () => {
-    if (!teacher) return
-    try {
-      setStatus("calling")
-      const AgoraRTC = (await import("agora-rtc-sdk-ng")).default
-      const token = await getToken(teacher.channel)
-      const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" })
-      clientRef.current = client
-
-      client.on("user-published", async (user: any, mediaType: "audio" | "video") => {
-        await client.subscribe(user, mediaType)
-        if (mediaType === "audio") {
-          user.audioTrack.play()
-          setStatus("connected")
-          startTimer()
-          await markQueueInCall(teacher.id)
-        }
-      })
-
-      await client.join(APP_ID, teacher.channel, token, null)
-      const localTrack = await AgoraRTC.createMicrophoneAudioTrack()
-      localTrackRef.current = localTrack
-      await client.publish([localTrack])
-
-      const stream = new MediaStream([localTrack.getMediaStreamTrack()])
-      const recorder = new MediaRecorder(stream)
-      chunksRef.current = []
-      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data) }
-      recorder.start()
-      recorderRef.current = recorder
-
-      setStatus("connected")
-      startTimer()
-    } catch (err: any) {
-      console.error(err)
-      setStatus("idle")
-      alert("通話開始エラー: " + err.message)
-    }
-  }
-
-  const endCall = async () => {
-    const duration = callTime
-    stopTimer()
-    await markQueueCompleted()
-
-    if (recorderRef.current && recorderRef.current.state !== "inactive") {
-      recorderRef.current.stop()
-      recorderRef.current.onstop = async () => {
-        const blob = new Blob(chunksRef.current, { type: "audio/webm" })
-        await uploadRecording(blob, duration)
-      }
-    }
-
-    if (localTrackRef.current) { localTrackRef.current.close(); localTrackRef.current = null }
-    if (clientRef.current) { await clientRef.current.leave(); clientRef.current = null }
-    setStatus("idle")
-    setCallTime(0)
-    setMuted(false)
-  }
-
   const uploadRecording = async (blob: Blob, duration: number) => {
     if (!teacher) return
     setUploading(true)
@@ -314,7 +286,6 @@ export default function CallPage() {
         .from("recordings")
         .upload(fileName, blob, { contentType: "audio/webm" })
       if (error) throw error
-
       await supabase.from("call_recordings").insert({
         teacher_id: teacher.id,
         recording_url: fileName,
@@ -330,9 +301,7 @@ export default function CallPage() {
   }
 
   const getSignedUrl = async (filePath: string) => {
-    const { data } = await supabase.storage
-      .from("recordings")
-      .createSignedUrl(filePath, 3600)
+    const { data } = await supabase.storage.from("recordings").createSignedUrl(filePath, 3600)
     return data?.signedUrl
   }
 
@@ -371,46 +340,17 @@ export default function CallPage() {
   return (
     <div className="p-4 max-w-2xl relative">
 
-      {/* ========== トースト通知 ========== */}
-      <div style={{
-        position: "fixed", top: 20, right: 20, zIndex: 9999,
-        display: "flex", flexDirection: "column", gap: 12,
-      }}>
-        {toasts.map(toast => (
-          <div key={toast.id} style={{
-            background: "#fff", borderRadius: 16,
-            boxShadow: "0 4px 24px rgba(0,0,0,0.15)",
-            border: "1px solid #e0f0e8",
-            padding: "16px 20px", minWidth: 280, maxWidth: 340,
-            animation: "slideIn 0.3s ease",
+      {/* トースト（通知のみ） */}
+      <div style={{ position: "fixed", top: 20, right: 20, zIndex: 9999, display: "flex", flexDirection: "column", gap: 8 }}>
+        {toasts.map((msg, i) => (
+          <div key={i} style={{
+            background: "#fff", borderRadius: 12,
+            boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
+            border: "1px solid #d1fae5",
+            padding: "12px 16px",
+            fontSize: "0.9rem", fontWeight: 600, color: "#065f46",
           }}>
-            <p style={{ fontSize: "0.95rem", fontWeight: 700, color: "#1a3a2a", marginBottom: 12 }}>
-              {toast.message}
-            </p>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button
-                onClick={() => startWaiting(toast.waitingEntryId, toast.id)}
-                style={{
-                  flex: 1, padding: "8px 0", borderRadius: 10,
-                  background: "#10b981", border: "none",
-                  color: "#fff", fontWeight: 700, fontSize: "0.85rem",
-                  cursor: "pointer",
-                }}
-              >
-                📞 待機開始
-              </button>
-              <button
-                onClick={() => removeToast(toast.id)}
-                style={{
-                  padding: "8px 14px", borderRadius: 10,
-                  background: "#f3f4f6", border: "none",
-                  color: "#6b7280", fontSize: "0.85rem",
-                  cursor: "pointer",
-                }}
-              >
-                後で
-              </button>
-            </div>
+            {msg}
           </div>
         ))}
       </div>
@@ -424,7 +364,7 @@ export default function CallPage() {
 
       <h1 className="text-xl font-bold mb-2">通話</h1>
 
-      {/* 待機人数表示 */}
+      {/* 待機人数 */}
       {waitingCount > 0 && (
         <div className="mb-4 px-4 py-2 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">
           現在 <span className="font-bold">{waitingCount}人</span> が待機中です
@@ -440,16 +380,15 @@ export default function CallPage() {
         )}
         <p className="text-sm text-gray-500 mb-6">
           {status === "idle" && "待機中"}
-          {status === "calling" && "接続中..."}
+          {status === "calling" && "呼び出し中..."}
           {status === "connected" && "通話中"}
         </p>
 
-        {status === "idle" ? (
-          <button onClick={startCall}
-            className="w-16 h-16 rounded-full bg-teal-500 hover:bg-teal-600 text-white text-2xl mx-auto flex items-center justify-center shadow-lg">
-            📞
-          </button>
-        ) : (
+        {status === "idle" && waitingList.length === 0 && (
+          <p className="text-sm text-gray-400">待機中のお客様はいません</p>
+        )}
+
+        {status !== "idle" && (
           <div className="flex items-center justify-center gap-6">
             <button onClick={toggleMute}
               className={`w-12 h-12 rounded-full flex items-center justify-center text-xl shadow ${muted ? "bg-red-100 text-red-500" : "bg-gray-100 text-gray-600"}`}>
@@ -465,10 +404,11 @@ export default function CallPage() {
             </button>
           </div>
         )}
+
         {uploading && <p className="text-xs text-gray-400 mt-4">録音をアップロード中...</p>}
       </div>
 
-      {/* 待機列リスト */}
+      {/* 待機中のお客様リスト */}
       {waitingList.length > 0 && (
         <div className="mb-6">
           <h2 className="font-bold text-gray-700 mb-3">待機中のお客様</h2>
@@ -482,12 +422,20 @@ export default function CallPage() {
                   <p className="text-sm text-gray-700 font-medium">お客様</p>
                   <p className="text-xs text-gray-400">{formatTimeAgo(entry.requested_at)}</p>
                 </div>
-                <button
-                  onClick={() => startWaiting(entry.id)}
-                  className="text-sm bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-lg font-bold shrink-0"
-                >
-                  待機開始
-                </button>
+                {/* 通話中でなく、かつこのエントリが呼び出し中でない場合のみ表示 */}
+                {status === "idle" && callingEntryId !== entry.id && (
+                  <button
+                    onClick={() => startCallToCustomer(entry.id)}
+                    className="text-sm bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-lg font-bold shrink-0"
+                  >
+                    📞 通話開始
+                  </button>
+                )}
+                {callingEntryId === entry.id && (
+                  <span className="text-sm text-teal-600 font-bold shrink-0 animate-pulse">
+                    呼び出し中...
+                  </span>
+                )}
               </div>
             ))}
           </div>
