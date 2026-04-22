@@ -18,6 +18,21 @@ type Recording = {
   recording_duration: number
 }
 
+type WaitingEntry = {
+  id: string
+  user_id: string
+  status: string
+  requested_at: string
+  agora_channel: string
+}
+
+type Toast = {
+  id: number
+  message: string
+  waitingEntryId: string
+  userId: string
+}
+
 export default function CallPage() {
   const [status, setStatus] = useState<"idle" | "calling" | "connected">("idle")
   const [muted, setMuted] = useState(false)
@@ -28,7 +43,10 @@ export default function CallPage() {
   const [uploading, setUploading] = useState(false)
   const [playingId, setPlayingId] = useState<string | null>(null)
   const [waitingCount, setWaitingCount] = useState(0)
+  const [waitingList, setWaitingList] = useState<WaitingEntry[]>([])
   const [currentQueueId, setCurrentQueueId] = useState<string | null>(null)
+  const [toasts, setToasts] = useState<Toast[]>([])
+  const toastIdRef = useRef(0)
 
   const clientRef = useRef<any>(null)
   const localTrackRef = useRef<any>(null)
@@ -36,6 +54,8 @@ export default function CallPage() {
   const chunksRef = useRef<Blob[]>([])
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const notificationRef = useRef<HTMLAudioElement | null>(null)
+  const teacherRef = useRef<{ id: string; name: string; channel: string } | null>(null)
 
   useEffect(() => {
     initTeacher()
@@ -48,9 +68,98 @@ export default function CallPage() {
     const t = EMAIL_TO_TEACHER[user.email]
     if (t) {
       setTeacher(t)
+      teacherRef.current = t
       fetchRecordings(t.id)
-      fetchWaitingCount(t.id)
+      fetchWaitingList(t.id)
+      subscribeWaitingQueue(t.id)
     }
+  }
+
+  // ---- 通知音を鳴らす ----
+  const playNotification = () => {
+    try {
+      const audio = new Audio("/sounds/notification.mp3")
+      audio.play().catch(err => console.error("通知音エラー:", err))
+      notificationRef.current = audio
+    } catch (err) {
+      console.error("通知音エラー:", err)
+    }
+  }
+
+  // ---- トースト表示 ----
+  const addToast = (message: string, waitingEntryId: string, userId: string) => {
+    const id = ++toastIdRef.current
+    setToasts(prev => [...prev, { id, message, waitingEntryId, userId }])
+    // 30秒後に自動削除
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id))
+    }, 30000)
+  }
+
+  const removeToast = (id: number) => {
+    setToasts(prev => prev.filter(t => t.id !== id))
+  }
+
+  // ---- Supabase Realtime 購読 ----
+  const subscribeWaitingQueue = (teacherId: string) => {
+    const channel = supabase
+      .channel("admin_waiting_queue")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "waiting_queue",
+          filter: `teacher_id=eq.${teacherId}`,
+        },
+        (payload) => {
+          // 新しいお客様が来た！
+          playNotification()
+          const entry = payload.new as WaitingEntry
+          addToast("📞 新しいお客様が来ました！", entry.id, entry.user_id)
+          fetchWaitingList(teacherId)
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "waiting_queue",
+          filter: `teacher_id=eq.${teacherId}`,
+        },
+        () => {
+          fetchWaitingList(teacherId)
+        }
+      )
+      .subscribe()
+
+    return channel
+  }
+
+  const fetchWaitingList = async (teacherId: string) => {
+    const { data } = await supabase
+      .from("waiting_queue")
+      .select("id, user_id, status, requested_at, agora_channel")
+      .eq("teacher_id", teacherId)
+      .eq("status", "waiting")
+      .order("requested_at", { ascending: true })
+    setWaitingList(data ?? [])
+    setWaitingCount(data?.length ?? 0)
+  }
+
+  // ---- 待機開始（お客様に着信音を鳴らす） ----
+  const startWaiting = async (entryId: string, toastId?: number) => {
+    await supabase
+      .from("waiting_queue")
+      .update({ status: "calling" })
+      .eq("id", entryId)
+
+    // トーストを閉じる
+    if (toastId !== undefined) removeToast(toastId)
+
+    // 待機リスト更新
+    if (teacherRef.current) fetchWaitingList(teacherRef.current.id)
   }
 
   const fetchWaitingCount = async (teacherId: string) => {
@@ -62,30 +171,21 @@ export default function CallPage() {
     setWaitingCount(count ?? 0)
   }
 
-  // 通話開始時：先頭の待機レコードをin_callに更新
   const markQueueInCall = async (teacherId: string) => {
     const { data } = await supabase
       .from("waiting_queue")
       .select("id")
       .eq("teacher_id", teacherId)
-      .eq("status", "waiting")
+      .eq("status", "in_call")
       .order("requested_at", { ascending: true })
       .limit(1)
       .single()
 
     if (data?.id) {
-      await supabase
-        .from("waiting_queue")
-        .update({
-          status: "in_call",
-          call_started_at: new Date().toISOString(),
-        })
-        .eq("id", data.id)
       setCurrentQueueId(data.id)
     }
   }
 
-  // 通話終了時：in_callレコードをcompletedに更新
   const markQueueCompleted = async () => {
     if (!currentQueueId) return
     await supabase
@@ -96,7 +196,7 @@ export default function CallPage() {
       })
       .eq("id", currentQueueId)
     setCurrentQueueId(null)
-    if (teacher) fetchWaitingCount(teacher.id)
+    if (teacher) fetchWaitingList(teacher.id)
   }
 
   const fetchRecordings = async (teacherId: string) => {
@@ -139,6 +239,12 @@ export default function CallPage() {
     return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`
   }
 
+  const formatTimeAgo = (s: string) => {
+    const diff = Math.floor((Date.now() - new Date(s).getTime()) / 1000)
+    if (diff < 60) return `${diff}秒前`
+    return `${Math.floor(diff / 60)}分前`
+  }
+
   const startCall = async () => {
     if (!teacher) return
     try {
@@ -154,7 +260,6 @@ export default function CallPage() {
           user.audioTrack.play()
           setStatus("connected")
           startTimer()
-          // 待機列を in_call に更新
           await markQueueInCall(teacher.id)
         }
       })
@@ -183,8 +288,6 @@ export default function CallPage() {
   const endCall = async () => {
     const duration = callTime
     stopTimer()
-
-    // 待機列を completed に更新
     await markQueueCompleted()
 
     if (recorderRef.current && recorderRef.current.state !== "inactive") {
@@ -222,7 +325,6 @@ export default function CallPage() {
       await fetchRecordings(teacher.id)
     } catch (err) {
       console.error("アップロードエラー:", err)
-      alert("録音のアップロードに失敗しました")
     }
     setUploading(false)
   }
@@ -267,7 +369,59 @@ export default function CallPage() {
   }
 
   return (
-    <div className="p-4 max-w-2xl">
+    <div className="p-4 max-w-2xl relative">
+
+      {/* ========== トースト通知 ========== */}
+      <div style={{
+        position: "fixed", top: 20, right: 20, zIndex: 9999,
+        display: "flex", flexDirection: "column", gap: 12,
+      }}>
+        {toasts.map(toast => (
+          <div key={toast.id} style={{
+            background: "#fff", borderRadius: 16,
+            boxShadow: "0 4px 24px rgba(0,0,0,0.15)",
+            border: "1px solid #e0f0e8",
+            padding: "16px 20px", minWidth: 280, maxWidth: 340,
+            animation: "slideIn 0.3s ease",
+          }}>
+            <p style={{ fontSize: "0.95rem", fontWeight: 700, color: "#1a3a2a", marginBottom: 12 }}>
+              {toast.message}
+            </p>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                onClick={() => startWaiting(toast.waitingEntryId, toast.id)}
+                style={{
+                  flex: 1, padding: "8px 0", borderRadius: 10,
+                  background: "#10b981", border: "none",
+                  color: "#fff", fontWeight: 700, fontSize: "0.85rem",
+                  cursor: "pointer",
+                }}
+              >
+                📞 待機開始
+              </button>
+              <button
+                onClick={() => removeToast(toast.id)}
+                style={{
+                  padding: "8px 14px", borderRadius: 10,
+                  background: "#f3f4f6", border: "none",
+                  color: "#6b7280", fontSize: "0.85rem",
+                  cursor: "pointer",
+                }}
+              >
+                後で
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <style>{`
+        @keyframes slideIn {
+          from { transform: translateX(100%); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
+        }
+      `}</style>
+
       <h1 className="text-xl font-bold mb-2">通話</h1>
 
       {/* 待機人数表示 */}
@@ -277,6 +431,7 @@ export default function CallPage() {
         </div>
       )}
 
+      {/* 通話カード */}
       <div className="bg-white border rounded-2xl p-8 text-center shadow-sm mb-6">
         <div className="w-20 h-20 rounded-full bg-teal-100 flex items-center justify-center text-3xl mx-auto mb-4">🔮</div>
         <h2 className="text-xl font-bold text-gray-800 mb-1">{teacher?.name ?? "読み込み中..."}</h2>
@@ -313,6 +468,33 @@ export default function CallPage() {
         {uploading && <p className="text-xs text-gray-400 mt-4">録音をアップロード中...</p>}
       </div>
 
+      {/* 待機列リスト */}
+      {waitingList.length > 0 && (
+        <div className="mb-6">
+          <h2 className="font-bold text-gray-700 mb-3">待機中のお客様</h2>
+          <div className="space-y-2">
+            {waitingList.map((entry, index) => (
+              <div key={entry.id} className="bg-white border rounded-xl px-4 py-3 flex items-center gap-3 shadow-sm">
+                <div className="w-8 h-8 rounded-full bg-teal-100 flex items-center justify-center text-sm font-bold text-teal-600 shrink-0">
+                  {index + 1}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-gray-700 font-medium">お客様</p>
+                  <p className="text-xs text-gray-400">{formatTimeAgo(entry.requested_at)}</p>
+                </div>
+                <button
+                  onClick={() => startWaiting(entry.id)}
+                  className="text-sm bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-lg font-bold shrink-0"
+                >
+                  待機開始
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 録音履歴 */}
       <div>
         <h2 className="font-bold text-gray-700 mb-3">録音履歴</h2>
         {recordings.length === 0 && <p className="text-gray-400 text-sm">録音はまだありません</p>}
@@ -338,4 +520,3 @@ export default function CallPage() {
     </div>
   )
 }
-
