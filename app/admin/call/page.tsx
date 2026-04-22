@@ -49,11 +49,19 @@ export default function CallPage() {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const callRingRef = useRef<HTMLAudioElement | null>(null)
   const teacherRef = useRef<{ id: string; name: string; channel: string } | null>(null)
+  const callingEntryIdRef = useRef<string | null>(null)
+  const statusRef = useRef<"idle" | "calling" | "connected">("idle")
 
   useEffect(() => {
     initTeacher()
     return () => { stopTimer(); stopCallRing() }
   }, [])
+
+  // statusをrefでも管理（Realtimeコールバック内で参照するため）
+  const updateStatus = (s: "idle" | "calling" | "connected") => {
+    setStatus(s)
+    statusRef.current = s
+  }
 
   const initTeacher = async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -78,7 +86,7 @@ export default function CallPage() {
     }
   }
 
-  // ---- 呼び出し音（占い師側） ----
+  // ---- 呼び出し音 ----
   const playCallRing = () => {
     const audio = new Audio("/sounds/call_ring.mp3")
     audio.loop = true
@@ -111,7 +119,7 @@ export default function CallPage() {
         schema: "public",
         table: "waiting_queue",
         filter: `teacher_id=eq.${teacherId}`,
-      }, (payload) => {
+      }, () => {
         playNotification()
         addToast("📞 新しいお客様が来ました！")
         fetchWaitingList(teacherId)
@@ -121,7 +129,33 @@ export default function CallPage() {
         schema: "public",
         table: "waiting_queue",
         filter: `teacher_id=eq.${teacherId}`,
-      }, () => {
+      }, (payload) => {
+        const newStatus = payload.new.status
+        const entryId = payload.new.id
+
+        // お客様が応答した → 通話開始
+        if (
+          newStatus === "in_call" &&
+          entryId === callingEntryIdRef.current &&
+          statusRef.current === "calling"
+        ) {
+          stopCallRing()
+          updateStatus("connected")
+          startTimer()
+          setCurrentQueueId(entryId)
+        }
+
+        // お客様がキャンセル → リセット
+        if (
+          newStatus === "cancelled" &&
+          entryId === callingEntryIdRef.current
+        ) {
+          stopCallRing()
+          updateStatus("idle")
+          callingEntryIdRef.current = null
+          setCallingEntryId(null)
+        }
+
         fetchWaitingList(teacherId)
       })
       .subscribe()
@@ -140,36 +174,27 @@ export default function CallPage() {
 
   // ---- 通話開始（占い師が押す） ----
   const startCallToCustomer = async (entryId: string) => {
+    if (!teacherRef.current) return
+
     // waiting_queue を calling に更新 → お客様に着信音が鳴る
     await supabase
       .from("waiting_queue")
       .update({ status: "calling" })
       .eq("id", entryId)
 
+    callingEntryIdRef.current = entryId
     setCallingEntryId(entryId)
+    updateStatus("calling")
 
-    // 占い師に呼び出し音を鳴らす
+    // 占い師に呼び出し音
     playCallRing()
 
-    // 占い師側もAgora接続開始
-    if (!teacherRef.current) return
+    // Agora接続（占い師側）
     try {
-      setStatus("calling")
       const AgoraRTC = (await import("agora-rtc-sdk-ng")).default
       const token = await getToken(teacherRef.current.channel)
       const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" })
       clientRef.current = client
-
-      client.on("user-published", async (user: any, mediaType: "audio" | "video") => {
-        await client.subscribe(user, mediaType)
-        if (mediaType === "audio") {
-          user.audioTrack.play()
-          setStatus("connected")
-          startTimer()
-          stopCallRing()
-          setCurrentQueueId(entryId)
-        }
-      })
 
       client.on("user-left", async () => {
         await endCall()
@@ -180,6 +205,7 @@ export default function CallPage() {
       localTrackRef.current = localTrack
       await client.publish([localTrack])
 
+      // 録音開始
       const stream = new MediaStream([localTrack.getMediaStreamTrack()])
       const recorder = new MediaRecorder(stream)
       chunksRef.current = []
@@ -189,12 +215,15 @@ export default function CallPage() {
 
     } catch (err: any) {
       console.error(err)
-      setStatus("idle")
+      updateStatus("idle")
       stopCallRing()
+      callingEntryIdRef.current = null
+      setCallingEntryId(null)
       alert("通話開始エラー: " + err.message)
     }
   }
 
+  // ---- 通話終了 ----
   const endCall = async () => {
     const duration = callTime
     stopTimer()
@@ -211,20 +240,21 @@ export default function CallPage() {
     if (localTrackRef.current) { localTrackRef.current.close(); localTrackRef.current = null }
     if (clientRef.current) { await clientRef.current.leave(); clientRef.current = null }
 
-    if (currentQueueId) {
+    const queueId = currentQueueId || callingEntryIdRef.current
+    if (queueId) {
       await supabase
         .from("waiting_queue")
         .update({
           status: "completed",
           call_ended_at: new Date().toISOString(),
         })
-        .eq("id", currentQueueId)
+        .eq("id", queueId)
       setCurrentQueueId(null)
     }
 
-    if (callingEntryId) setCallingEntryId(null)
-
-    setStatus("idle")
+    callingEntryIdRef.current = null
+    setCallingEntryId(null)
+    updateStatus("idle")
     setCallTime(0)
     setMuted(false)
 
@@ -355,13 +385,6 @@ export default function CallPage() {
         ))}
       </div>
 
-      <style>{`
-        @keyframes slideIn {
-          from { transform: translateX(100%); opacity: 0; }
-          to { transform: translateX(0); opacity: 1; }
-        }
-      `}</style>
-
       <h1 className="text-xl font-bold mb-2">通話</h1>
 
       {/* 待機人数 */}
@@ -422,8 +445,7 @@ export default function CallPage() {
                   <p className="text-sm text-gray-700 font-medium">お客様</p>
                   <p className="text-xs text-gray-400">{formatTimeAgo(entry.requested_at)}</p>
                 </div>
-                {/* 通話中でなく、かつこのエントリが呼び出し中でない場合のみ表示 */}
-                {status === "idle" && callingEntryId !== entry.id && (
+                {status === "idle" && (
                   <button
                     onClick={() => startCallToCustomer(entry.id)}
                     className="text-sm bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-lg font-bold shrink-0"
@@ -431,7 +453,7 @@ export default function CallPage() {
                     📞 通話開始
                   </button>
                 )}
-                {callingEntryId === entry.id && (
+                {callingEntryId === entry.id && status === "calling" && (
                   <span className="text-sm text-teal-600 font-bold shrink-0 animate-pulse">
                     呼び出し中...
                   </span>
