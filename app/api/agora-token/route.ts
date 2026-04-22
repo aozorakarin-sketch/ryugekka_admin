@@ -11,8 +11,8 @@ const AGORA_CONFIGS: Record<string, { appId: string; certificate: string }> = {
     certificate: "ef42b9883c5e499b89a6ad4c55a1fcb0",
   },
   renren: {
-    appId: "", // 雲龍蓮のApp IDが来たら追加
-    certificate: "", // 雲龍蓮のCertificateが来たら追加
+    appId: "fa155866c0a84096a0a6ef289932c651",
+    certificate: "81e840047a4d4add8ba82f5416211af7",
   },
 }
 
