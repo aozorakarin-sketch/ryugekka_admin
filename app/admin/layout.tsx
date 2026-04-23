@@ -4,9 +4,8 @@ import { supabase } from "@/lib/supabaseClient"
 import { useRouter, usePathname } from "next/navigation"
 import { useEffect, useState } from "react"
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
-import { LayoutDashboard, Users, MessageSquare, Mic, Calendar, CalendarDays, Settings, LogOut, Star, FileText } from "lucide-react"
-import { Phone } from "lucide-react"
-import { Bell } from "lucide-react"
+import { LayoutDashboard, Users, MessageSquare, Mic, Calendar, Settings, LogOut, Star, FileText, Phone, Bell, Coins } from "lucide-react"
+
 const ALLOWED_EMAILS = ['bazvideo412@gmail.com', 'tomo517ko@gmail.com', 'aozora.karin@gmail.com']
 
 const menuItems = [
@@ -20,12 +19,14 @@ const menuItems = [
   { title: "レビュー", url: "/admin/reviews", icon: Star },
   { title: "レビュー下書き", url: "/admin/reviews/drafts", icon: FileText },
   { title: "ダミーレビュー", url: "/admin/reviews/dummy", icon: Star },
-  { title: "シフト管理", url: "/admin/shifts", icon: Calendar },  // ← 
+  { title: "シフト管理", url: "/admin/shifts", icon: Calendar },
   { title: "ブログ管理", url: "/admin/blog", icon: FileText },
   { title: "待機列管理", url: "/admin/waiting", icon: Users },
+  { title: "ポイント付与", url: "/admin/points", icon: Coins },
   { title: "設定", url: "/admin/settings", icon: Settings },
   { title: "通話", url: "/admin/call", icon: Phone },
 ]
+
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
