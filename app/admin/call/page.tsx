@@ -57,7 +57,6 @@ export default function CallPage() {
     return () => { stopTimer(); stopCallRing() }
   }, [])
 
-  // statusをrefでも管理（Realtimeコールバック内で参照するため）
   const updateStatus = (s: "idle" | "calling" | "connected") => {
     setStatus(s)
     statusRef.current = s
@@ -76,7 +75,6 @@ export default function CallPage() {
     }
   }
 
-  // ---- 通知音 ----
   const playNotification = () => {
     try {
       const audio = new Audio("/sounds/notification.mp3")
@@ -86,7 +84,6 @@ export default function CallPage() {
     }
   }
 
-  // ---- 呼び出し音 ----
   const playCallRing = () => {
     const audio = new Audio("/sounds/call_ring.mp3")
     audio.loop = true
@@ -102,7 +99,6 @@ export default function CallPage() {
     }
   }
 
-  // ---- トースト（通知のみ） ----
   const addToast = (message: string) => {
     setToasts(prev => [...prev, message])
     setTimeout(() => {
@@ -110,7 +106,6 @@ export default function CallPage() {
     }, 5000)
   }
 
-  // ---- Supabase Realtime ----
   const subscribeWaitingQueue = (teacherId: string) => {
     supabase
       .channel("admin_waiting_queue")
@@ -133,7 +128,6 @@ export default function CallPage() {
         const newStatus = payload.new.status
         const entryId = payload.new.id
 
-        // お客様が応答した → 通話開始
         if (
           newStatus === "in_call" &&
           entryId === callingEntryIdRef.current &&
@@ -145,7 +139,6 @@ export default function CallPage() {
           setCurrentQueueId(entryId)
         }
 
-        // お客様がキャンセル → リセット
         if (
           newStatus === "cancelled" &&
           entryId === callingEntryIdRef.current
@@ -176,7 +169,6 @@ export default function CallPage() {
   const startCallToCustomer = async (entryId: string) => {
     if (!teacherRef.current) return
 
-    // waiting_queue を calling に更新 → お客様に着信音が鳴る
     await supabase
       .from("waiting_queue")
       .update({ status: "calling" })
@@ -185,16 +177,21 @@ export default function CallPage() {
     callingEntryIdRef.current = entryId
     setCallingEntryId(entryId)
     updateStatus("calling")
-
-    // 占い師に呼び出し音
     playCallRing()
 
-    // Agora接続（占い師側）
     try {
       const AgoraRTC = (await import("agora-rtc-sdk-ng")).default
       const token = await getToken(teacherRef.current.channel)
       const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" })
       clientRef.current = client
+
+      // ✅ お客さんの音声を受信する
+      client.on("user-published", async (remoteUser: any, mediaType: "audio" | "video") => {
+        await client.subscribe(remoteUser, mediaType)
+        if (mediaType === "audio") {
+          remoteUser.audioTrack.play()
+        }
+      })
 
       client.on("user-left", async () => {
         await endCall()
@@ -370,7 +367,7 @@ export default function CallPage() {
   return (
     <div className="p-4 max-w-2xl relative">
 
-      {/* トースト（通知のみ） */}
+      {/* トースト */}
       <div style={{ position: "fixed", top: 20, right: 20, zIndex: 9999, display: "flex", flexDirection: "column", gap: 8 }}>
         {toasts.map((msg, i) => (
           <div key={i} style={{
@@ -387,7 +384,6 @@ export default function CallPage() {
 
       <h1 className="text-xl font-bold mb-2">通話</h1>
 
-      {/* 待機人数 */}
       {waitingCount > 0 && (
         <div className="mb-4 px-4 py-2 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">
           現在 <span className="font-bold">{waitingCount}人</span> が待機中です
