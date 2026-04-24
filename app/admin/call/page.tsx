@@ -106,86 +106,15 @@ export default function CallPage() {
     }, 5000)
   }
 
-  const subscribeWaitingQueue = (teacherId: string) => {
-    supabase
-      .channel("admin_waiting_queue")
-      .on("postgres_changes", {
-        event: "INSERT",
-        schema: "public",
-        table: "waiting_queue",
-        filter: `teacher_id=eq.${teacherId}`,
-      }, () => {
-        playNotification()
-        addToast("📞 新しいお客様が来ました！")
-        fetchWaitingList(teacherId)
-      })
-      .on("postgres_changes", {
-        event: "UPDATE",
-        schema: "public",
-        table: "waiting_queue",
-        filter: `teacher_id=eq.${teacherId}`,
-      }, (payload) => {
-        const newStatus = payload.new.status
-        const entryId = payload.new.id
-
-        if (
-          newStatus === "in_call" &&
-          entryId === callingEntryIdRef.current &&
-          statusRef.current === "calling"
-        ) {
-          stopCallRing()
-          updateStatus("connected")
-          startTimer()
-          setCurrentQueueId(entryId)
-        }
-
-        if (
-          newStatus === "cancelled" &&
-          entryId === callingEntryIdRef.current
-        ) {
-          stopCallRing()
-          updateStatus("idle")
-          callingEntryIdRef.current = null
-          setCallingEntryId(null)
-        }
-
-        fetchWaitingList(teacherId)
-      })
-      .subscribe()
-  }
-
-  const fetchWaitingList = async (teacherId: string) => {
-    const { data } = await supabase
-      .from("waiting_queue")
-      .select("id, user_id, status, requested_at, agora_channel")
-      .eq("teacher_id", teacherId)
-      .eq("status", "waiting")
-      .order("requested_at", { ascending: true })
-    setWaitingList(data ?? [])
-    setWaitingCount(data?.length ?? 0)
-  }
-
-  // ---- 通話開始（占い師が押す） ----
-  const startCallToCustomer = async (entryId: string) => {
+  // ---- Agora接続（ユーザーが応答してin_callになってから呼ぶ） ----
+  const joinAgora = async () => {
     if (!teacherRef.current) return
-
-    await supabase
-      .from("waiting_queue")
-      .update({ status: "calling" })
-      .eq("id", entryId)
-
-    callingEntryIdRef.current = entryId
-    setCallingEntryId(entryId)
-    updateStatus("calling")
-    playCallRing()
-
     try {
       const AgoraRTC = (await import("agora-rtc-sdk-ng")).default
       const token = await getToken(teacherRef.current.channel)
       const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" })
       clientRef.current = client
 
-      // ✅ お客さんの音声を受信する
       client.on("user-published", async (remoteUser: any, mediaType: "audio" | "video") => {
         await client.subscribe(remoteUser, mediaType)
         if (mediaType === "audio") {
@@ -218,6 +147,83 @@ export default function CallPage() {
       setCallingEntryId(null)
       alert("通話開始エラー: " + err.message)
     }
+  }
+
+  const subscribeWaitingQueue = (teacherId: string) => {
+    supabase
+      .channel("admin_waiting_queue")
+      .on("postgres_changes", {
+        event: "INSERT",
+        schema: "public",
+        table: "waiting_queue",
+        filter: `teacher_id=eq.${teacherId}`,
+      }, () => {
+        playNotification()
+        addToast("📞 新しいお客様が来ました！")
+        fetchWaitingList(teacherId)
+      })
+      .on("postgres_changes", {
+        event: "UPDATE",
+        schema: "public",
+        table: "waiting_queue",
+        filter: `teacher_id=eq.${teacherId}`,
+      }, async (payload) => {
+        const newStatus = payload.new.status
+        const entryId = payload.new.id
+
+        if (
+          newStatus === "in_call" &&
+          entryId === callingEntryIdRef.current &&
+          statusRef.current === "calling"
+        ) {
+          stopCallRing()
+          updateStatus("connected")
+          setCurrentQueueId(entryId)
+          await new Promise(resolve => setTimeout(resolve, 1500)) // ユーザーのjoin・publishを待つ
+          await joinAgora()  // ユーザーが応答してからAgora接続
+          startTimer()
+        }
+
+        if (
+          newStatus === "cancelled" &&
+          entryId === callingEntryIdRef.current
+        ) {
+          stopCallRing()
+          updateStatus("idle")
+          callingEntryIdRef.current = null
+          setCallingEntryId(null)
+        }
+
+        fetchWaitingList(teacherId)
+      })
+      .subscribe()
+  }
+
+  const fetchWaitingList = async (teacherId: string) => {
+    const { data } = await supabase
+      .from("waiting_queue")
+      .select("id, user_id, status, requested_at, agora_channel")
+      .eq("teacher_id", teacherId)
+      .eq("status", "waiting")
+      .order("requested_at", { ascending: true })
+    setWaitingList(data ?? [])
+    setWaitingCount(data?.length ?? 0)
+  }
+
+  // ---- 通話開始（占い師が押す） ----
+  // callingに更新してユーザーに着信を知らせるだけ。Agora joinはユーザー応答後。
+  const startCallToCustomer = async (entryId: string) => {
+    if (!teacherRef.current) return
+
+    await supabase
+      .from("waiting_queue")
+      .update({ status: "calling" })
+      .eq("id", entryId)
+
+    callingEntryIdRef.current = entryId
+    setCallingEntryId(entryId)
+    updateStatus("calling")
+    playCallRing()
   }
 
   // ---- 通話終了 ----
