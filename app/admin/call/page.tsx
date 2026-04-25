@@ -29,7 +29,6 @@ type Recording = {
 export default function CallPage() {
   const [status, setStatus] = useState<"idle" | "calling" | "connected">("idle")
   const [muted, setMuted] = useState(false)
-  const [speaker, setSpeaker] = useState(true)
   const [callTime, setCallTime] = useState(0)
   const [teacher, setTeacher] = useState<{ id: string; name: string; channel: string } | null>(null)
   const [recordings, setRecordings] = useState<Recording[]>([])
@@ -179,8 +178,8 @@ export default function CallPage() {
           stopCallRing()
           updateStatus("connected")
           setCurrentQueueId(entryId)
-          await new Promise(resolve => setTimeout(resolve, 1500)) // ユーザーのjoin・publishを待つ
-          await joinAgora()  // ユーザーが応答してからAgora接続
+          await new Promise(resolve => setTimeout(resolve, 500)) // 500msでユーザーのjoinを待つ
+          await joinAgora()
           startTimer()
         }
 
@@ -211,7 +210,6 @@ export default function CallPage() {
   }
 
   // ---- 通話開始（占い師が押す） ----
-  // callingに更新してユーザーに着信を知らせるだけ。Agora joinはユーザー応答後。
   const startCallToCustomer = async (entryId: string) => {
     if (!teacherRef.current) return
 
@@ -363,9 +361,10 @@ export default function CallPage() {
     a.click()
   }
 
+  // ---- ミュート切り替え（修正済み） ----
   const toggleMute = () => {
     if (localTrackRef.current) {
-      localTrackRef.current.setEnabled(muted)
+      localTrackRef.current.setEnabled(muted) // muteのときfalse→有効、unmuteのときtrue→有効
       setMuted(!muted)
     }
   }
@@ -413,6 +412,7 @@ export default function CallPage() {
           <p className="text-sm text-gray-400">待機中のお客様はいません</p>
         )}
 
+        {/* 通話中：ミュートと終話のみ（スピーカー削除） */}
         {status !== "idle" && (
           <div className="flex items-center justify-center gap-6">
             <button onClick={toggleMute}
@@ -422,10 +422,6 @@ export default function CallPage() {
             <button onClick={endCall}
               className="w-16 h-16 rounded-full bg-red-500 hover:bg-red-600 text-white text-2xl flex items-center justify-center shadow-lg">
               📵
-            </button>
-            <button onClick={() => setSpeaker(!speaker)}
-              className={`w-12 h-12 rounded-full flex items-center justify-center text-xl shadow ${speaker ? "bg-teal-100 text-teal-600" : "bg-gray-100 text-gray-600"}`}>
-              {speaker ? "🔊" : "🔈"}
             </button>
           </div>
         )}
