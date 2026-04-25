@@ -42,8 +42,10 @@ export default function CallPage() {
 
   const clientRef = useRef<any>(null)
   const localTrackRef = useRef<any>(null)
+  const remoteTrackRef = useRef<any>(null)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
+  const audioContextRef = useRef<AudioContext | null>(null)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const callRingRef = useRef<HTMLAudioElement | null>(null)
@@ -53,7 +55,11 @@ export default function CallPage() {
 
   useEffect(() => {
     initTeacher()
-    return () => { stopTimer(); stopCallRing() }
+    return () => {
+      stopTimer()
+      stopCallRing()
+      if (audioContextRef.current) audioContextRef.current.close()
+    }
   }, [])
 
   const updateStatus = (s: "idle" | "calling" | "connected") => {
@@ -100,12 +106,39 @@ export default function CallPage() {
 
   const addToast = (message: string) => {
     setToasts(prev => [...prev, message])
-    setTimeout(() => {
-      setToasts(prev => prev.slice(1))
-    }, 5000)
+    setTimeout(() => { setToasts(prev => prev.slice(1)) }, 5000)
   }
 
-  // ---- Agora接続（ユーザーが応答してin_callになってから呼ぶ） ----
+  // ---- ミックス録音開始 ----
+  const startMixedRecording = (localTrack: any, remoteTrack: any) => {
+    try {
+      const audioContext = new AudioContext()
+      audioContextRef.current = audioContext
+      const destination = audioContext.createMediaStreamDestination()
+
+      // ローカル（自分）の声
+      const localStream = new MediaStream([localTrack.getMediaStreamTrack()])
+      const localSource = audioContext.createMediaStreamSource(localStream)
+      localSource.connect(destination)
+
+      // リモート（お客さん）の声
+      if (remoteTrack) {
+        const remoteStream = new MediaStream([remoteTrack.getMediaStreamTrack()])
+        const remoteSource = audioContext.createMediaStreamSource(remoteStream)
+        remoteSource.connect(destination)
+      }
+
+      const recorder = new MediaRecorder(destination.stream)
+      chunksRef.current = []
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data) }
+      recorder.start()
+      recorderRef.current = recorder
+    } catch (err) {
+      console.error("録音開始エラー:", err)
+    }
+  }
+
+  // ---- Agora接続 ----
   const joinAgora = async () => {
     if (!teacherRef.current) return
     try {
@@ -118,25 +151,21 @@ export default function CallPage() {
         await client.subscribe(remoteUser, mediaType)
         if (mediaType === "audio") {
           remoteUser.audioTrack.play()
+          remoteTrackRef.current = remoteUser.audioTrack
+
+          // リモートトラック取得後にミックス録音開始
+          if (localTrackRef.current) {
+            startMixedRecording(localTrackRef.current, remoteUser.audioTrack)
+          }
         }
       })
 
-      client.on("user-left", async () => {
-        await endCall()
-      })
+      client.on("user-left", async () => { await endCall() })
 
       await client.join(APP_ID, teacherRef.current.channel, token, null)
       const localTrack = await AgoraRTC.createMicrophoneAudioTrack()
       localTrackRef.current = localTrack
       await client.publish([localTrack])
-
-      // 録音開始
-      const stream = new MediaStream([localTrack.getMediaStreamTrack()])
-      const recorder = new MediaRecorder(stream)
-      chunksRef.current = []
-      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data) }
-      recorder.start()
-      recorderRef.current = recorder
 
     } catch (err: any) {
       console.error(err)
@@ -152,9 +181,7 @@ export default function CallPage() {
     supabase
       .channel("admin_waiting_queue")
       .on("postgres_changes", {
-        event: "INSERT",
-        schema: "public",
-        table: "waiting_queue",
+        event: "INSERT", schema: "public", table: "waiting_queue",
         filter: `teacher_id=eq.${teacherId}`,
       }, () => {
         playNotification()
@@ -162,31 +189,22 @@ export default function CallPage() {
         fetchWaitingList(teacherId)
       })
       .on("postgres_changes", {
-        event: "UPDATE",
-        schema: "public",
-        table: "waiting_queue",
+        event: "UPDATE", schema: "public", table: "waiting_queue",
         filter: `teacher_id=eq.${teacherId}`,
       }, async (payload) => {
         const newStatus = payload.new.status
         const entryId = payload.new.id
 
-        if (
-          newStatus === "in_call" &&
-          entryId === callingEntryIdRef.current &&
-          statusRef.current === "calling"
-        ) {
+        if (newStatus === "in_call" && entryId === callingEntryIdRef.current && statusRef.current === "calling") {
           stopCallRing()
           updateStatus("connected")
           setCurrentQueueId(entryId)
-          await new Promise(resolve => setTimeout(resolve, 500)) // 500msでユーザーのjoinを待つ
+          await new Promise(resolve => setTimeout(resolve, 500))
           await joinAgora()
           startTimer()
         }
 
-        if (
-          newStatus === "cancelled" &&
-          entryId === callingEntryIdRef.current
-        ) {
+        if (newStatus === "cancelled" && entryId === callingEntryIdRef.current) {
           stopCallRing()
           updateStatus("idle")
           callingEntryIdRef.current = null
@@ -209,22 +227,15 @@ export default function CallPage() {
     setWaitingCount(data?.length ?? 0)
   }
 
-  // ---- 通話開始（占い師が押す） ----
   const startCallToCustomer = async (entryId: string) => {
     if (!teacherRef.current) return
-
-    await supabase
-      .from("waiting_queue")
-      .update({ status: "calling" })
-      .eq("id", entryId)
-
+    await supabase.from("waiting_queue").update({ status: "calling" }).eq("id", entryId)
     callingEntryIdRef.current = entryId
     setCallingEntryId(entryId)
     updateStatus("calling")
     playCallRing()
   }
 
-  // ---- 通話終了 ----
   const endCall = async () => {
     const duration = callTime
     stopTimer()
@@ -238,17 +249,19 @@ export default function CallPage() {
       }
     }
 
+    if (audioContextRef.current) {
+      audioContextRef.current.close()
+      audioContextRef.current = null
+    }
+
     if (localTrackRef.current) { localTrackRef.current.close(); localTrackRef.current = null }
     if (clientRef.current) { await clientRef.current.leave(); clientRef.current = null }
+    remoteTrackRef.current = null
 
     const queueId = currentQueueId || callingEntryIdRef.current
     if (queueId) {
-      await supabase
-        .from("waiting_queue")
-        .update({
-          status: "completed",
-          call_ended_at: new Date().toISOString(),
-        })
+      await supabase.from("waiting_queue")
+        .update({ status: "completed", call_ended_at: new Date().toISOString() })
         .eq("id", queueId)
       setCurrentQueueId(null)
     }
@@ -313,9 +326,7 @@ export default function CallPage() {
     setUploading(true)
     try {
       const fileName = `${teacher.id}/${new Date().toISOString().replace(/[:.]/g, "-")}.webm`
-      const { error } = await supabase.storage
-        .from("recordings")
-        .upload(fileName, blob, { contentType: "audio/webm" })
+      const { error } = await supabase.storage.from("recordings").upload(fileName, blob, { contentType: "audio/webm" })
       if (error) throw error
       await supabase.from("call_recordings").insert({
         teacher_id: teacher.id,
@@ -337,11 +348,7 @@ export default function CallPage() {
   }
 
   const togglePlay = async (rec: Recording) => {
-    if (playingId === rec.id) {
-      audioRef.current?.pause()
-      setPlayingId(null)
-      return
-    }
+    if (playingId === rec.id) { audioRef.current?.pause(); setPlayingId(null); return }
     const url = await getSignedUrl(rec.recording_url)
     if (!url) return
     if (audioRef.current) audioRef.current.pause()
@@ -358,32 +365,27 @@ export default function CallPage() {
     const a = document.createElement("a")
     a.href = url
     a.download = `通話録音_${rec.created_at.slice(0, 16).replace("T", "_")}.webm`
+    document.body.appendChild(a)
     a.click()
+    document.body.removeChild(a)
   }
 
-  // ---- ミュート切り替え（修正済み） ----
   const toggleMute = () => {
     if (localTrackRef.current) {
-      localTrackRef.current.setEnabled(muted) // muteのときfalse→有効、unmuteのときtrue→有効
+      localTrackRef.current.setEnabled(muted)
       setMuted(!muted)
     }
   }
 
   return (
     <div className="p-4 max-w-2xl relative">
-
-      {/* トースト */}
       <div style={{ position: "fixed", top: 20, right: 20, zIndex: 9999, display: "flex", flexDirection: "column", gap: 8 }}>
         {toasts.map((msg, i) => (
           <div key={i} style={{
-            background: "#fff", borderRadius: 12,
-            boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
-            border: "1px solid #d1fae5",
-            padding: "12px 16px",
+            background: "#fff", borderRadius: 12, boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
+            border: "1px solid #d1fae5", padding: "12px 16px",
             fontSize: "0.9rem", fontWeight: 600, color: "#065f46",
-          }}>
-            {msg}
-          </div>
+          }}>{msg}</div>
         ))}
       </div>
 
@@ -395,13 +397,10 @@ export default function CallPage() {
         </div>
       )}
 
-      {/* 通話カード */}
       <div className="bg-white border rounded-2xl p-8 text-center shadow-sm mb-6">
         <div className="w-20 h-20 rounded-full bg-teal-100 flex items-center justify-center text-3xl mx-auto mb-4">🔮</div>
         <h2 className="text-xl font-bold text-gray-800 mb-1">{teacher?.name ?? "読み込み中..."}</h2>
-        {status !== "idle" && (
-          <p className="text-2xl font-mono text-teal-600 mb-2">{formatTime(callTime)}</p>
-        )}
+        {status !== "idle" && <p className="text-2xl font-mono text-teal-600 mb-2">{formatTime(callTime)}</p>}
         <p className="text-sm text-gray-500 mb-6">
           {status === "idle" && "待機中"}
           {status === "calling" && "呼び出し中..."}
@@ -412,7 +411,6 @@ export default function CallPage() {
           <p className="text-sm text-gray-400">待機中のお客様はいません</p>
         )}
 
-        {/* 通話中：ミュートと終話のみ（スピーカー削除） */}
         {status !== "idle" && (
           <div className="flex items-center justify-center gap-6">
             <button onClick={toggleMute}
@@ -429,7 +427,6 @@ export default function CallPage() {
         {uploading && <p className="text-xs text-gray-400 mt-4">録音をアップロード中...</p>}
       </div>
 
-      {/* 待機中のお客様リスト */}
       {waitingList.length > 0 && (
         <div className="mb-6">
           <h2 className="font-bold text-gray-700 mb-3">待機中のお客様</h2>
@@ -444,17 +441,13 @@ export default function CallPage() {
                   <p className="text-xs text-gray-400">{formatTimeAgo(entry.requested_at)}</p>
                 </div>
                 {status === "idle" && (
-                  <button
-                    onClick={() => startCallToCustomer(entry.id)}
-                    className="text-sm bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-lg font-bold shrink-0"
-                  >
+                  <button onClick={() => startCallToCustomer(entry.id)}
+                    className="text-sm bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-lg font-bold shrink-0">
                     📞 通話開始
                   </button>
                 )}
                 {callingEntryId === entry.id && status === "calling" && (
-                  <span className="text-sm text-teal-600 font-bold shrink-0 animate-pulse">
-                    呼び出し中...
-                  </span>
+                  <span className="text-sm text-teal-600 font-bold shrink-0 animate-pulse">呼び出し中...</span>
                 )}
               </div>
             ))}
@@ -462,7 +455,6 @@ export default function CallPage() {
         </div>
       )}
 
-      {/* 録音履歴 */}
       <div>
         <h2 className="font-bold text-gray-700 mb-3">録音履歴</h2>
         {recordings.length === 0 && <p className="text-gray-400 text-sm">録音はまだありません</p>}
