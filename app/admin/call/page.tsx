@@ -38,7 +38,7 @@ export default function CallPage() {
   const [waitingList, setWaitingList] = useState<WaitingEntry[]>([])
   const [currentQueueId, setCurrentQueueId] = useState<string | null>(null)
   const [callingEntryId, setCallingEntryId] = useState<string | null>(null)
-  const [toasts, setToasts] = useState<string[]>([])
+  const [toasts, setToasts] = useState<{ message: string; type: 'normal' | 'warning' }[]>([])
 
   const clientRef = useRef<any>(null)
   const localTrackRef = useRef<any>(null)
@@ -104,9 +104,9 @@ export default function CallPage() {
     }
   }
 
-  const addToast = (message: string) => {
-    setToasts(prev => [...prev, message])
-    setTimeout(() => { setToasts(prev => prev.slice(1)) }, 5000)
+  const addToast = (message: string, type: 'normal' | 'warning' = 'normal') => {
+    setToasts(prev => [...prev, { message, type }])
+    setTimeout(() => { setToasts(prev => prev.slice(1)) }, 6000)
   }
 
   // ---- ミックス録音開始 ----
@@ -116,12 +116,10 @@ export default function CallPage() {
       audioContextRef.current = audioContext
       const destination = audioContext.createMediaStreamDestination()
 
-      // ローカル（自分）の声
       const localStream = new MediaStream([localTrack.getMediaStreamTrack()])
       const localSource = audioContext.createMediaStreamSource(localStream)
       localSource.connect(destination)
 
-      // リモート（お客さん）の声
       if (remoteTrack) {
         const remoteStream = new MediaStream([remoteTrack.getMediaStreamTrack()])
         const remoteSource = audioContext.createMediaStreamSource(remoteStream)
@@ -152,8 +150,6 @@ export default function CallPage() {
         if (mediaType === "audio") {
           remoteUser.audioTrack.play()
           remoteTrackRef.current = remoteUser.audioTrack
-
-          // リモートトラック取得後にミックス録音開始
           if (localTrackRef.current) {
             startMixedRecording(localTrackRef.current, remoteUser.audioTrack)
           }
@@ -194,6 +190,7 @@ export default function CallPage() {
       }, async (payload) => {
         const newStatus = payload.new.status
         const entryId = payload.new.id
+        const endReason = payload.new.end_reason
 
         if (newStatus === "in_call" && entryId === callingEntryIdRef.current && statusRef.current === "calling") {
           stopCallRing()
@@ -209,6 +206,12 @@ export default function CallPage() {
           updateStatus("idle")
           callingEntryIdRef.current = null
           setCallingEntryId(null)
+        }
+
+        // ポイント不足で自動終話された場合
+        if (newStatus === "completed" && endReason === "point_exhausted") {
+          addToast("⚠️ お客様のポイント不足で切電されました", "warning")
+          await endCall()
         }
 
         fetchWaitingList(teacherId)
@@ -260,9 +263,18 @@ export default function CallPage() {
 
     const queueId = currentQueueId || callingEntryIdRef.current
     if (queueId) {
-      await supabase.from("waiting_queue")
-        .update({ status: "completed", call_ended_at: new Date().toISOString() })
+      // end_reasonがpoint_exhaustedの場合は上書きしない
+      const { data: existing } = await supabase
+        .from("waiting_queue")
+        .select("end_reason")
         .eq("id", queueId)
+        .single()
+
+      if (existing?.end_reason !== "point_exhausted") {
+        await supabase.from("waiting_queue")
+          .update({ status: "completed", call_ended_at: new Date().toISOString() })
+          .eq("id", queueId)
+      }
       setCurrentQueueId(null)
     }
 
@@ -379,13 +391,19 @@ export default function CallPage() {
 
   return (
     <div className="p-4 max-w-2xl relative">
+      {/* トースト通知 */}
       <div style={{ position: "fixed", top: 20, right: 20, zIndex: 9999, display: "flex", flexDirection: "column", gap: 8 }}>
-        {toasts.map((msg, i) => (
+        {toasts.map((toast, i) => (
           <div key={i} style={{
-            background: "#fff", borderRadius: 12, boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
-            border: "1px solid #d1fae5", padding: "12px 16px",
-            fontSize: "0.9rem", fontWeight: 600, color: "#065f46",
-          }}>{msg}</div>
+            background: "#fff",
+            borderRadius: 12,
+            boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
+            border: toast.type === 'warning' ? "1px solid #ffcccc" : "1px solid #d1fae5",
+            padding: "12px 16px",
+            fontSize: "0.9rem",
+            fontWeight: 600,
+            color: toast.type === 'warning' ? "#c0392b" : "#065f46",
+          }}>{toast.message}</div>
         ))}
       </div>
 
