@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { supabase } from "@/lib/supabaseClient";
 
 type FortuneRequest = {
   id: string;
@@ -31,7 +31,7 @@ export default function FortuneRequestsPage() {
   const [selected, setSelected] = useState<FortuneRequest | null>(null);
   const [editResult, setEditResult] = useState("");
   const [loading, setLoading] = useState(true);
-  const supabase = createClient();
+ // const supabase = createClient();
 
   useEffect(() => {
     loadRequests();
