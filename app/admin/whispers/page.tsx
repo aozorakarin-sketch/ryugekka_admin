@@ -9,12 +9,38 @@ const EMAIL_TO_TEACHER: Record<string, { id: string; name: string }> = {
   "bazvideo412@gmail.com": { id: "3ba85bb9-9065-461b-b76b-cc488d4c0c3b", name: "雲龍蓮" },
 }
 
+const MAX_CHARS = 60
+const MAX_LINES = 3
+const MAX_LINE_CHARS = 20
+
 type Whisper = {
   id: string
   content: string
   is_visible: boolean
   publish_at: string | null
   created_at: string
+  button1_label: string | null
+  button1_url: string | null
+  button2_label: string | null
+  button2_url: string | null
+  button3_label: string | null
+  button3_url: string | null
+  likes_count: number
+}
+
+// 文字数・行数チェック
+function validateContent(text: string): { valid: boolean; charCount: number; lineCount: number; lineErrors: number[] } {
+  const lines = text.split("\n")
+  const lineErrors: number[] = []
+  lines.forEach((line, i) => {
+    if (line.length > MAX_LINE_CHARS) lineErrors.push(i)
+  })
+  return {
+    valid: text.length <= MAX_CHARS && lines.length <= MAX_LINES && lineErrors.length === 0,
+    charCount: text.length,
+    lineCount: lines.length,
+    lineErrors,
+  }
 }
 
 export default function WhispersPage() {
@@ -26,6 +52,12 @@ export default function WhispersPage() {
   const [content, setContent] = useState("")
   const [publishAt, setPublishAt] = useState("")
   const [isVisible, setIsVisible] = useState(true)
+  const [button1Label, setButton1Label] = useState("")
+  const [button1Url, setButton1Url] = useState("")
+  const [button2Label, setButton2Label] = useState("")
+  const [button2Url, setButton2Url] = useState("")
+  const [button3Label, setButton3Label] = useState("")
+  const [button3Url, setButton3Url] = useState("")
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -41,7 +73,7 @@ export default function WhispersPage() {
 
     const { data } = await supabase
       .from("whispers")
-      .select("id, content, is_visible, publish_at, created_at")
+      .select("id, content, is_visible, publish_at, created_at, button1_label, button1_url, button2_label, button2_url, button3_label, button3_url, likes_count")
       .eq("teacher_id", t.id)
       .order("publish_at", { ascending: false, nullsFirst: false })
     setWhispers(data ?? [])
@@ -53,6 +85,9 @@ export default function WhispersPage() {
     setContent("")
     setPublishAt("")
     setIsVisible(true)
+    setButton1Label(""); setButton1Url("")
+    setButton2Label(""); setButton2Url("")
+    setButton3Label(""); setButton3Url("")
     setShowModal(true)
   }
 
@@ -61,6 +96,9 @@ export default function WhispersPage() {
     setContent(w.content)
     setPublishAt(w.publish_at ? w.publish_at.slice(0, 16) : "")
     setIsVisible(w.is_visible)
+    setButton1Label(w.button1_label ?? ""); setButton1Url(w.button1_url ?? "")
+    setButton2Label(w.button2_label ?? ""); setButton2Url(w.button2_url ?? "")
+    setButton3Label(w.button3_label ?? ""); setButton3Url(w.button3_url ?? "")
     setShowModal(true)
   }
 
@@ -71,11 +109,19 @@ export default function WhispersPage() {
 
   const save = async () => {
     if (!teacher || !content.trim()) return
+    const { valid } = validateContent(content)
+    if (!valid) return
     setSaving(true)
     const payload = {
       content,
       is_visible: isVisible,
       publish_at: publishAt ? new Date(publishAt).toISOString() : null,
+      button1_label: button1Label.trim() || null,
+      button1_url: button1Url.trim() || null,
+      button2_label: button2Label.trim() || null,
+      button2_url: button2Url.trim() || null,
+      button3_label: button3Label.trim() || null,
+      button3_url: button3Url.trim() || null,
     }
 
     if (editTarget) {
@@ -115,6 +161,13 @@ export default function WhispersPage() {
     return new Date(w.publish_at) <= new Date()
   }
 
+  const validation = validateContent(content)
+  const charColor = !validation.valid
+    ? "text-red-500"
+    : validation.charCount > MAX_CHARS * 0.85
+    ? "text-orange-400"
+    : "text-gray-400"
+
   if (loading) return <div className="p-6">読み込み中...</div>
 
   return (
@@ -144,8 +197,29 @@ export default function WhispersPage() {
                   <span className="text-xs text-gray-400">
                     公開日時：{formatDate(w.publish_at)}
                   </span>
+                  {w.likes_count > 0 && (
+                    <span className="text-xs text-gray-400">❤️ {w.likes_count}</span>
+                  )}
                 </div>
                 <p className="text-sm whitespace-pre-wrap">{w.content}</p>
+                {/* ボタン表示 */}
+                {[
+                  { label: w.button1_label, url: w.button1_url },
+                  { label: w.button2_label, url: w.button2_url },
+                  { label: w.button3_label, url: w.button3_url },
+                ].filter(b => b.label).length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {[
+                      { label: w.button1_label, url: w.button1_url },
+                      { label: w.button2_label, url: w.button2_url },
+                      { label: w.button3_label, url: w.button3_url },
+                    ].filter(b => b.label).map((b, i) => (
+                      <span key={i} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full border">
+                        🔗 {b.label}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="flex gap-2 shrink-0">
                 <button
@@ -173,20 +247,60 @@ export default function WhispersPage() {
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-2xl mx-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <h2 className="text-lg font-bold mb-4">{editTarget ? "編集" : "新規作成"}</h2>
-            <div className="space-y-3">
+            <div className="space-y-4">
+
+              {/* 本文 */}
               <div>
-                <label className="text-xs text-gray-500">本文</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs text-gray-500">本文</label>
+                  <div className={`text-xs font-mono ${charColor}`}>
+                    {validation.charCount}/{MAX_CHARS}文字　{validation.lineCount}/{MAX_LINES}行
+                  </div>
+                </div>
                 <textarea
-                  className="w-full border rounded px-2 py-1 mt-1 text-sm"
-                  style={{ height: "200px" }}
+                  className={`w-full border rounded px-2 py-1 text-sm resize-none font-mono ${!validation.valid && content.trim() ? "border-red-400 bg-red-50" : ""}`}
+                  rows={4}
                   value={content}
-                  onChange={e => setContent(e.target.value)}
-                  placeholder="つぶやきを入力してください"
+                  onChange={e => {
+                    // 改行で行数チェック
+                    const lines = e.target.value.split("\n")
+                    if (lines.length > MAX_LINES) return
+                    setContent(e.target.value)
+                  }}
+                  placeholder={"1行20文字以内・最大3行\n例：今日も鑑定中です✨\n気になる方はお気軽に"}
                 />
+                {/* 行ごとの文字数バー */}
+                <div className="mt-1 space-y-0.5">
+                  {content.split("\n").map((line, i) => {
+                    const over = line.length > MAX_LINE_CHARS
+                    return (
+                      <div key={i} className="flex items-center gap-1">
+                        <span className="text-xs text-gray-300 w-8">{i + 1}行</span>
+                        <div className="flex-1 bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${over ? "bg-red-400" : line.length > MAX_LINE_CHARS * 0.8 ? "bg-orange-400" : "bg-teal-400"}`}
+                            style={{ width: `${Math.min((line.length / MAX_LINE_CHARS) * 100, 100)}%` }}
+                          />
+                        </div>
+                        <span className={`text-xs w-8 text-right ${over ? "text-red-500 font-bold" : "text-gray-400"}`}>
+                          {line.length}/{MAX_LINE_CHARS}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+                {!validation.valid && content.trim() && (
+                  <p className="text-xs text-red-500 mt-1">
+                    {validation.lineErrors.length > 0 && `${validation.lineErrors.map(i => i + 1).join("・")}行目が20文字を超えています。`}
+                    {validation.charCount > MAX_CHARS && `合計${validation.charCount}文字（上限${MAX_CHARS}文字）。`}
+                  </p>
+                )}
               </div>
+
+              {/* 公開日時 */}
               <div>
                 <label className="text-xs text-gray-500">公開日時（未来の日付で予約投稿）</label>
                 <input
@@ -197,6 +311,8 @@ export default function WhispersPage() {
                 />
                 <p className="text-xs text-gray-400 mt-1">空欄の場合は即時公開</p>
               </div>
+
+              {/* 公開チェック */}
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
@@ -206,8 +322,49 @@ export default function WhispersPage() {
                 />
                 <label htmlFor="isVisible" className="text-sm">公開する</label>
               </div>
+
+              {/* ボタン設定 */}
+              <div>
+                <label className="text-xs text-gray-500 block mb-2">ボタン（最大3つ・ラベルとURLをセットで入力）</label>
+                <div className="space-y-2">
+                  {[
+                    { n: 1, label: button1Label, url: button1Url, setLabel: setButton1Label, setUrl: setButton1Url },
+                    { n: 2, label: button2Label, url: button2Url, setLabel: setButton2Label, setUrl: setButton2Url },
+                    { n: 3, label: button3Label, url: button3Url, setLabel: setButton3Label, setUrl: setButton3Url },
+                  ].map(({ n, label, url, setLabel, setUrl }) => (
+                    <div key={n} className="flex gap-2 items-center p-2 bg-gray-50 rounded-lg border">
+                      <span className="text-xs text-gray-400 font-bold w-4 shrink-0">#{n}</span>
+                      <input
+                        type="text"
+                        className="border rounded px-2 py-1 text-sm w-28 shrink-0"
+                        placeholder="ラベル"
+                        maxLength={12}
+                        value={label}
+                        onChange={e => setLabel(e.target.value)}
+                      />
+                      <input
+                        type="text"
+                        className="border rounded px-2 py-1 text-sm flex-1 min-w-0"
+                        placeholder="URL（https://… または /blog/hana など）"
+                        value={url}
+                        onChange={e => setUrl(e.target.value)}
+                      />
+                      {(label || url) && (
+                        <button
+                          onClick={() => { setLabel(""); setUrl("") }}
+                          className="text-gray-300 hover:text-red-400 text-sm shrink-0"
+                          title="クリア"
+                        >✕</button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-400 mt-1">ラベルのみ入力でURLなしボタンは表示されません</p>
+              </div>
+
             </div>
-            <div className="flex justify-between mt-4">
+
+            <div className="flex justify-between mt-5">
               <button
                 onClick={closeModal}
                 className="text-sm bg-gray-400 hover:bg-gray-500 text-white px-4 py-1.5 rounded"
@@ -216,7 +373,7 @@ export default function WhispersPage() {
               </button>
               <button
                 onClick={save}
-                disabled={saving || !content.trim()}
+                disabled={saving || !content.trim() || !validation.valid}
                 className="text-sm bg-teal-500 hover:bg-teal-600 text-white px-4 py-1.5 rounded disabled:opacity-50"
               >
                 {saving ? "保存中..." : "保存"}
