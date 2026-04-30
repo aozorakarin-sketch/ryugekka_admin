@@ -7,6 +7,8 @@ type FortuneRequest = {
   id: string;
   user_name: string;
   user_email: string;
+  birth_date: string | null;
+  partner_birth_date: string | null;
   category: string;
   consultation: string;
   result: string | null;
@@ -20,11 +22,11 @@ type FortuneRequest = {
 };
 
 const STATUS_CONFIG: Record<string, { label: string; emoji: string; bg: string; color: string }> = {
-  queued:  { label: "受付済み",  emoji: "📥", bg: "#e0f2fe", color: "#0369a1" },
+  queued:  { label: "受付済み",   emoji: "📥", bg: "#e0f2fe", color: "#0369a1" },
   retry:   { label: "再試行待ち", emoji: "🔄", bg: "#fef3c7", color: "#92400e" },
-  pending: { label: "送信待ち",  emoji: "⏳", bg: "#fef9c3", color: "#854d0e" },
-  sent:    { label: "送信済み",  emoji: "✅", bg: "#dcfce7", color: "#166534" },
-  error:   { label: "エラー",    emoji: "❌", bg: "#fee2e2", color: "#991b1b" },
+  pending: { label: "送信待ち",   emoji: "⏳", bg: "#fef9c3", color: "#854d0e" },
+  sent:    { label: "送信済み",   emoji: "✅", bg: "#dcfce7", color: "#166534" },
+  error:   { label: "エラー",     emoji: "❌", bg: "#fee2e2", color: "#991b1b" },
 };
 
 export default function FortuneRequestsPage() {
@@ -50,7 +52,6 @@ export default function FortuneRequestsPage() {
 
   async function handleSendNow(id: string) {
     if (!confirm("今すぐ送信キューに入れますか？")) return;
-    // pending + send_atを過去にすることで次のcronで即送信
     await supabase
       .from("fortune_requests")
       .update({
@@ -66,7 +67,6 @@ export default function FortuneRequestsPage() {
 
   async function handleRetryGeminiNow(id: string) {
     if (!confirm("Gemini再試行を今すぐ実行しますか？")) return;
-    // retry_afterを過去にすることで次のcronでGemini再試行
     await supabase
       .from("fortune_requests")
       .update({
@@ -184,7 +184,6 @@ export default function FortuneRequestsPage() {
                       >
                         確認・編集
                       </button>
-                      {/* resultがあってまだ未送信 → 今すぐ送信 */}
                       {r.result && r.status !== "sent" && (
                         <button
                           onClick={() => handleSendNow(r.id)}
@@ -193,7 +192,6 @@ export default function FortuneRequestsPage() {
                           今すぐ送信
                         </button>
                       )}
-                      {/* resultがない（Gemini未生成）→ Gemini再試行 */}
                       {!r.result && r.status !== "sent" && (
                         <button
                           onClick={() => handleRetryGeminiNow(r.id)}
@@ -218,52 +216,109 @@ export default function FortuneRequestsPage() {
           display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50,
         }}>
           <div style={{
-            background: "white", borderRadius: "12px", padding: "24px",
-            width: "90%", maxWidth: "720px", maxHeight: "90vh", overflow: "auto",
+            background: "white", borderRadius: "12px", padding: "28px",
+            width: "90%", maxWidth: "760px", maxHeight: "92vh", overflow: "auto",
             boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
           }}>
-            <h2 style={{ fontSize: "18px", fontWeight: "bold", marginBottom: "4px" }}>
-              {selected.user_name}さん / {selected.category}
-            </h2>
-            <p style={{ fontSize: "13px", color: "#666", marginBottom: "4px" }}>
-              📧 {selected.user_email}
-            </p>
-            <p style={{ fontSize: "13px", color: "#666", marginBottom: "16px" }}>
-              相談内容: {selected.consultation.substring(0, 150)}{selected.consultation.length > 150 ? "…" : ""}
-            </p>
 
-            <h3 style={{ fontSize: "14px", fontWeight: "600", marginBottom: "8px" }}>
-              鑑定文（編集可能）
-              {!selected.result && <span style={{ color: "#ef4444", fontWeight: "400", marginLeft: "8px", fontSize: "13px" }}>※ Gemini未生成（手動入力可）</span>}
-            </h3>
-            <textarea
-              value={editResult}
-              onChange={(e) => setEditResult(e.target.value)}
-              rows={20}
-              placeholder="鑑定文を入力してください..."
-              style={{
-                width: "100%", padding: "12px", borderRadius: "8px",
-                border: "1px solid #d1d5db", fontSize: "14px",
-                boxSizing: "border-box", lineHeight: "1.8", resize: "vertical",
-              }}
-            />
+            {/* ヘッダー */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px" }}>
+              <div>
+                <h2 style={{ fontSize: "18px", fontWeight: "bold", marginBottom: "4px" }}>
+                  {selected.user_name}さん / {selected.category}
+                </h2>
+                <p style={{ fontSize: "13px", color: "#6b7280" }}>📧 {selected.user_email}</p>
+              </div>
+              <button
+                onClick={() => setSelected(null)}
+                style={{ fontSize: "20px", background: "none", border: "none", cursor: "pointer", color: "#9ca3af", lineHeight: 1 }}
+              >
+                ✕
+              </button>
+            </div>
 
-            <div style={{ display: "flex", gap: "12px", marginTop: "16px", flexWrap: "wrap" }}>
+            {/* 依頼者情報 */}
+            <div style={{ display: "flex", gap: "16px", marginBottom: "20px", flexWrap: "wrap" }}>
+              {selected.birth_date && (
+                <div style={{ fontSize: "13px", color: "#6b7280" }}>
+                  🎂 本人: <span style={{ color: "#111827" }}>{selected.birth_date}</span>
+                </div>
+              )}
+              {selected.partner_birth_date && (
+                <div style={{ fontSize: "13px", color: "#6b7280" }}>
+                  💑 お相手: <span style={{ color: "#111827" }}>{selected.partner_birth_date}</span>
+                </div>
+              )}
+              <div style={{ fontSize: "13px", color: "#6b7280" }}>
+                🕐 受付: <span style={{ color: "#111827" }}>{formatDate(selected.created_at)}</span>
+              </div>
+            </div>
+
+            {/* 相談内容（全文） */}
+            <div style={{ marginBottom: "24px" }}>
+              <h3 style={{ fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "8px" }}>
+                📝 相談内容（全文）
+              </h3>
+              <div style={{
+                background: "#f9fafb",
+                border: "1px solid #e5e7eb",
+                borderRadius: "8px",
+                padding: "16px",
+                fontSize: "14px",
+                lineHeight: "2",
+                color: "#374151",
+                whiteSpace: "pre-wrap",
+                maxHeight: "220px",
+                overflowY: "auto",
+              }}>
+                {selected.consultation}
+              </div>
+            </div>
+
+            {/* 鑑定文エリア */}
+            <div>
+              <h3 style={{ fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "8px" }}>
+                ✨ 鑑定文（編集可能）
+                {!selected.result && (
+                  <span style={{ color: "#ef4444", fontWeight: "400", marginLeft: "8px", fontSize: "12px" }}>
+                    ※ Gemini未生成（手動入力可）
+                  </span>
+                )}
+              </h3>
+              <textarea
+                value={editResult}
+                onChange={(e) => setEditResult(e.target.value)}
+                rows={16}
+                placeholder="鑑定文を入力してください..."
+                style={{
+                  width: "100%", padding: "14px", borderRadius: "8px",
+                  border: "1px solid #d1d5db", fontSize: "14px",
+                  boxSizing: "border-box", lineHeight: "1.9", resize: "vertical",
+                  fontFamily: "inherit",
+                }}
+              />
+              <div style={{ textAlign: "right", fontSize: "12px", color: "#9ca3af", marginTop: "4px" }}>
+                {editResult.length.toLocaleString()}文字
+              </div>
+            </div>
+
+            {/* ボタン */}
+            <div style={{ display: "flex", gap: "12px", marginTop: "20px", flexWrap: "wrap" }}>
               <button
                 onClick={() => handleSaveEdit(selected.id)}
-                style={{ padding: "10px 20px", background: "#7c3aed", color: "white", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "500" }}
+                style={{ padding: "10px 20px", background: "#7c3aed", color: "white", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "500", fontSize: "14px" }}
               >
                 保存（5時間後に送信）
               </button>
               <button
                 onClick={() => handleSaveAndSendNow(selected.id)}
-                style={{ padding: "10px 20px", background: "#059669", color: "white", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "500" }}
+                style={{ padding: "10px 20px", background: "#059669", color: "white", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "500", fontSize: "14px" }}
               >
                 保存して今すぐ送信
               </button>
               <button
                 onClick={() => setSelected(null)}
-                style={{ padding: "10px 20px", border: "1px solid #d1d5db", borderRadius: "8px", cursor: "pointer", background: "white" }}
+                style={{ padding: "10px 20px", border: "1px solid #d1d5db", borderRadius: "8px", cursor: "pointer", background: "white", fontSize: "14px" }}
               >
                 閉じる
               </button>
