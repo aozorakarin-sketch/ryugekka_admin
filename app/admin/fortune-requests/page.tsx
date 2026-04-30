@@ -13,6 +13,7 @@ type FortuneRequest = {
   consultation: string;
   result: string | null;
   status: string;
+  plan: string | null;
   send_at: string | null;
   sent_at: string | null;
   created_at: string;
@@ -27,6 +28,12 @@ const STATUS_CONFIG: Record<string, { label: string; emoji: string; bg: string; 
   pending: { label: "送信待ち",   emoji: "⏳", bg: "#fef9c3", color: "#854d0e" },
   sent:    { label: "送信済み",   emoji: "✅", bg: "#dcfce7", color: "#166534" },
   error:   { label: "エラー",     emoji: "❌", bg: "#fee2e2", color: "#991b1b" },
+};
+
+const PLAN_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
+  lite:     { label: "ライト",       bg: "#f0fdf4", color: "#166534" },
+  standard: { label: "スタンダード", bg: "#eff6ff", color: "#1d4ed8" },
+  premium:  { label: "プレミアム",   bg: "#fdf4ff", color: "#7e22ce" },
 };
 
 export default function FortuneRequestsPage() {
@@ -118,6 +125,10 @@ export default function FortuneRequestsPage() {
     return STATUS_CONFIG[status] ?? { label: status, emoji: "❓", bg: "#f3f4f6", color: "#374151" };
   }
 
+  function getPlanConfig(plan: string | null) {
+    return PLAN_CONFIG[plan ?? "standard"] ?? PLAN_CONFIG.standard;
+  }
+
   return (
     <div style={{ padding: "24px" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" }}>
@@ -140,7 +151,7 @@ export default function FortuneRequestsPage() {
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px" }}>
           <thead>
             <tr style={{ background: "#f3f4f6" }}>
-              {["受付日時", "名前", "カテゴリ", "ステータス", "送信予定 / retry予定", "リトライ", "操作"].map((h) => (
+              {["受付日時", "名前", "カテゴリ", "プラン", "ステータス", "送信予定 / retry予定", "リトライ", "操作"].map((h) => (
                 <th key={h} style={{ padding: "10px 12px", textAlign: "left", borderBottom: "2px solid #e5e7eb", whiteSpace: "nowrap" }}>{h}</th>
               ))}
             </tr>
@@ -148,11 +159,21 @@ export default function FortuneRequestsPage() {
           <tbody>
             {requests.map((r) => {
               const sc = getStatusConfig(r.status);
+              const pc = getPlanConfig(r.plan);
               return (
                 <tr key={r.id} style={{ borderBottom: "1px solid #f0f0f0" }}>
                   <td style={{ padding: "12px", whiteSpace: "nowrap" }}>{formatDate(r.created_at)}</td>
                   <td style={{ padding: "12px", fontWeight: "500" }}>{r.user_name}</td>
                   <td style={{ padding: "12px" }}>{r.category}</td>
+                  <td style={{ padding: "12px" }}>
+                    <span style={{
+                      display: "inline-flex", alignItems: "center",
+                      padding: "2px 10px", borderRadius: "20px", fontSize: "12px",
+                      background: pc.bg, color: pc.color, fontWeight: "500",
+                    }}>
+                      {pc.label}
+                    </span>
+                  </td>
                   <td style={{ padding: "12px" }}>
                     <span style={{
                       display: "inline-flex", alignItems: "center", gap: "4px",
@@ -227,7 +248,16 @@ export default function FortuneRequestsPage() {
                 <h2 style={{ fontSize: "18px", fontWeight: "bold", marginBottom: "4px" }}>
                   {selected.user_name}さん / {selected.category}
                 </h2>
-                <p style={{ fontSize: "13px", color: "#6b7280" }}>📧 {selected.user_email}</p>
+                <div style={{ display: "flex", gap: "8px", alignItems: "center", marginTop: "4px" }}>
+                  <p style={{ fontSize: "13px", color: "#6b7280" }}>📧 {selected.user_email}</p>
+                  <span style={{
+                    padding: "2px 10px", borderRadius: "20px", fontSize: "12px", fontWeight: "500",
+                    background: getPlanConfig(selected.plan).bg,
+                    color: getPlanConfig(selected.plan).color,
+                  }}>
+                    {getPlanConfig(selected.plan).label}プラン
+                  </span>
+                </div>
               </div>
               <button
                 onClick={() => setSelected(null)}
@@ -260,16 +290,9 @@ export default function FortuneRequestsPage() {
                 📝 相談内容（全文）
               </h3>
               <div style={{
-                background: "#f9fafb",
-                border: "1px solid #e5e7eb",
-                borderRadius: "8px",
-                padding: "16px",
-                fontSize: "14px",
-                lineHeight: "2",
-                color: "#374151",
-                whiteSpace: "pre-wrap",
-                maxHeight: "220px",
-                overflowY: "auto",
+                background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "8px",
+                padding: "16px", fontSize: "14px", lineHeight: "2", color: "#374151",
+                whiteSpace: "pre-wrap", maxHeight: "220px", overflowY: "auto",
               }}>
                 {selected.consultation}
               </div>
