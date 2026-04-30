@@ -67,7 +67,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <SidebarProvider>
       <div className="flex min-h-screen w-full">
         <Sidebar>
-          <SidebarContent>
+          <SidebarContent className="overflow-y-auto">
             <SidebarGroup>
               <SidebarGroupLabel>龍月花 管理画面</SidebarGroupLabel>
               <SidebarGroupContent>
