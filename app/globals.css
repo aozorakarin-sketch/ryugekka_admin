@@ -128,3 +128,6 @@
     @apply font-sans;
   }
 }
+[data-sidebar="content"] {
+  overflow-y: auto !important;
+}
