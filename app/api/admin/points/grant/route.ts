@@ -6,10 +6,11 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
+// 正しいteacher_id
 const TEACHER_IDS = {
-  hana:  '8248973c-ad5f-434e-b211-10b8e10ff742',
-  tsuki: '70704a2a-964f-4254-a891-b1747b7e3522',
-  ryu:   '62e32c9f-9f15-49e6-9d1b-2c8c2adf9577',
+  hana:  'cd2c4101-2e24-4ae2-8d6a-507a943904af',
+  tsuki: '17cf0ca1-7526-466e-a644-9d3efefa4091',
+  ryu:   '3ba85bb9-9065-461b-b76b-cc488d4c0c3b',
 } as const
 
 export async function POST(req: NextRequest) {
@@ -31,7 +32,7 @@ export async function POST(req: NextRequest) {
       .select('id, points')
       .eq('user_id', user_id)
       .eq('teacher_id', teacher_id)
-      .single()
+      .maybeSingle()
 
     const currentPoints = current?.points ?? 0
     const newPoints = currentPoints + amount
@@ -44,19 +45,17 @@ export async function POST(req: NextRequest) {
     }
 
     if (current) {
-      // 既存行を更新
       await supabase
         .from('user_points')
         .update({ points: newPoints, updated_at: new Date().toISOString() })
         .eq('id', current.id)
     } else {
-      // 新規行を挿入（そのユーザー×占い師の初ポイント）
       await supabase
         .from('user_points')
         .insert({ user_id, teacher_id, points: newPoints })
     }
 
-    // 履歴記録
+    // 履歴記録（テーブルがなければスキップ）
     await supabase.from('point_transactions').insert({
       user_id,
       point_type,

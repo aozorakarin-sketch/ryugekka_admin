@@ -1,5 +1,5 @@
 'use client'
-import { useState, useCallback } from 'react'
+import { useState } from 'react'
 
 type PointType = 'ryu' | 'tsuki' | 'hana'
 
@@ -26,23 +26,28 @@ export default function AdminPointsPage() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null)
   const [searchTimer, setSearchTimer] = useState<NodeJS.Timeout | null>(null)
+  const [showDropdown, setShowDropdown] = useState(false)
 
   const handleQueryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value
     setQuery(val)
+    setSelected(null) // 入力変更時はselectedをリセット
+    setResult(null)
     if (searchTimer) clearTimeout(searchTimer)
-    if (!val) { setUsers([]); return }
+    if (!val) { setUsers([]); setShowDropdown(false); return }
     setSearchTimer(setTimeout(async () => {
       const res = await fetch(`/api/admin/users/search?q=${encodeURIComponent(val)}`)
       const data = await res.json()
       setUsers(data.users || [])
+      setShowDropdown(true)
     }, 300))
   }
 
   const handleSelect = (u: User) => {
     setSelected(u)
-    setQuery(u.name)
+    setQuery(u.name || u.email)
     setUsers([])
+    setShowDropdown(false)
     setResult(null)
   }
 
@@ -70,7 +75,6 @@ export default function AdminPointsPage() {
           success: true,
           message: `✅ ${POINT_CONFIG[pointType].emoji} ${data.balance.toLocaleString()}pt（${num > 0 ? '+' : ''}${num.toLocaleString()}pt）`,
         })
-        // 残高をその場で更新
         setSelected(prev => prev ? {
           ...prev,
           balance: { ...prev.balance, [pointType]: data.balance }
@@ -99,14 +103,20 @@ export default function AdminPointsPage() {
           placeholder="名前またはメールアドレス"
           value={query}
           onChange={handleQueryChange}
+          onFocus={() => users.length > 0 && setShowDropdown(true)}
+          autoComplete="off"
         />
-        {users.length > 0 && (
+        {showDropdown && users.length > 0 && (
           <ul className="absolute z-10 w-full bg-white border rounded-lg shadow-lg mt-1 max-h-48 overflow-y-auto">
             {users.map(u => (
               <li
                 key={u.id}
-                className="px-4 py-2 hover:bg-gray-50 cursor-pointer text-sm"
-                onClick={() => handleSelect(u)}
+                className="px-4 py-2 hover:bg-purple-50 cursor-pointer text-sm"
+                // onClickではなくonMouseDownを使うことでonBlurより先に発火する
+                onMouseDown={(e) => {
+                  e.preventDefault() // フォーカスを奪わない
+                  handleSelect(u)
+                }}
               >
                 <span className="font-medium">{u.name}</span>
                 <span className="text-gray-400 ml-2 text-xs">{u.email}</span>
@@ -118,8 +128,8 @@ export default function AdminPointsPage() {
 
       {/* 選択ユーザーの残高 */}
       {selected && (
-        <div className="bg-gray-50 rounded-xl p-4 space-y-1">
-          <p className="font-semibold text-sm">{selected.name}</p>
+        <div className="bg-purple-50 rounded-xl p-4 border border-purple-100">
+          <p className="font-semibold text-sm">✅ {selected.name}</p>
           <p className="text-xs text-gray-400">{selected.email}</p>
           <div className="flex gap-4 mt-2 text-sm">
             <span className="text-purple-600">🐉 {selected.balance.ryu.toLocaleString()}pt</span>
@@ -178,6 +188,11 @@ export default function AdminPointsPage() {
       >
         {loading ? '処理中...' : `${POINT_CONFIG[pointType].emoji} ポイントを付与する`}
       </button>
+
+      {/* selected状態の確認（デバッグ用・動作確認後削除可） */}
+      {!selected && amount && (
+        <p className="text-xs text-red-400 text-center">⚠️ ユーザーを候補リストから選択してください</p>
+      )}
 
       {/* 結果 */}
       {result && (
