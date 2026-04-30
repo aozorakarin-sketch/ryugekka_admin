@@ -10,7 +10,43 @@ const EMAIL_TO_TEACHER: Record<string, { id: string; name: string }> = {
   "bazvideo412@gmail.com": { id: "3ba85bb9-9065-461b-b76b-cc488d4c0c3b", name: "雲龍蓮" },
 }
 
+const TEACHER_STYLE: Record<string, { color: string; bg: string; emoji: string }> = {
+  "青空花林": { color: "#c0607a", bg: "#fff5f7", emoji: "🌸" },
+  "椎名架月": { color: "#c9a84c", bg: "#fffbf0", emoji: "🌙" },
+  "雲龍蓮":   { color: "#8b7cb8", bg: "#f8f5ff", emoji: "🐉" },
+}
+
 const CATEGORIES = ["スピリチュアル", "恋愛", "生活", "仕事", "健康", "その他"]
+
+function getTemplate(name: string): string {
+  const s = TEACHER_STYLE[name] ?? TEACHER_STYLE["青空花林"]
+  return `<h1>ここにタイトルを入力してください</h1>
+
+<p>導入文をここに書いてください。読者が続きを読みたくなるような一文から始めましょう${s.emoji}</p>
+
+<hr style="border: none; border-top: 2px solid ${s.color}33; margin: 1.5rem 0;" />
+
+<h2>${s.emoji} 最初の見出し</h2>
+<p>ここに本文を入力してください。</p>
+<p>段落を分けるときは &lt;p&gt; タグを使います。</p>
+
+<h2>${s.emoji} 次の見出し</h2>
+<p>ここに本文を入力してください。</p>
+
+<h3>◆ 小見出し</h3>
+<p>詳細な内容はここに書いてください。</p>
+
+<blockquote style="border-left: 4px solid ${s.color}; padding: 8px 16px; background: ${s.bg}; border-radius: 0 8px 8px 0; margin: 1rem 0;">
+  ここに引用や強調したいメッセージを入れてください。
+</blockquote>
+
+<h2>${s.emoji} まとめ</h2>
+<p>記事のまとめを書いてください。</p>
+
+<hr style="border: none; border-top: 2px solid ${s.color}33; margin: 1.5rem 0;" />
+
+<p style="text-align: center; color: ${s.color}; font-size: 0.9em;">最後まで読んでくださってありがとうございました${s.emoji}</p>`
+}
 
 export default function BlogEditPage() {
   const router = useRouter()
@@ -46,6 +82,9 @@ export default function BlogEditPage() {
         setPublishedAt(data.published_at ? new Date(data.published_at).toISOString().slice(0, 16) : "")
         setContent(data.content ?? "")
       }
+    } else {
+      // 新規作成時はテンプレートを入れる
+      setContent(getTemplate(t.name))
     }
     setLoading(false)
   }
@@ -134,7 +173,6 @@ export default function BlogEditPage() {
             value={content}
             onChange={e => setContent(e.target.value)}
             className="flex-1 border rounded p-3 text-sm font-mono resize-none focus:outline-none focus:border-teal-400"
-            placeholder={`<h1>見出し</h1>\n<p>本文を入力してください</p>\n<p style="color: red;">赤い文字</p>`}
             spellCheck={false}
           />
         </div>
@@ -153,6 +191,8 @@ export default function BlogEditPage() {
               .preview-content a { color: #0ea5e9; text-decoration: underline; }
               .preview-content strong { font-weight: bold; }
               .preview-content em { font-style: italic; }
+              .preview-content blockquote { margin: 0.8rem 0; }
+              .preview-content hr { margin: 1rem 0; }
             `}</style>
             <div
               className="preview-content"
