@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabaseClient"
 
 const EMAIL_TO_TEACHER: Record<string, { id: string; name: string }> = {
@@ -16,6 +15,30 @@ const TEACHER_NAMES: Record<string, string> = {
   "3ba85bb9-9065-461b-b76b-cc488d4c0c3b": "雲龍蓮",
 }
 
+const TEACHER_STYLE: Record<string, { color: string; bg: string; emoji: string }> = {
+  "青空花林": { color: "#c0607a", bg: "#fff5f7", emoji: "🌸" },
+  "椎名架月": { color: "#c9a84c", bg: "#fffbf0", emoji: "🌙" },
+  "雲龍蓮":   { color: "#8b7cb8", bg: "#f8f5ff", emoji: "🐉" },
+}
+
+function getTemplate(name: string): string {
+  const s = TEACHER_STYLE[name] ?? TEACHER_STYLE["青空花林"]
+  return `<p>お知らせの内容をここに書いてください。${s.emoji}</p>
+
+<hr style="border: none; border-top: 2px solid ${s.color}33; margin: 1.2rem 0;" />
+
+<h2 style="color: ${s.color};">${s.emoji} 詳細</h2>
+<p>詳しい内容をここに書いてください。</p>
+
+<blockquote style="border-left: 4px solid ${s.color}; padding: 8px 16px; background: ${s.bg}; border-radius: 0 8px 8px 0; margin: 1rem 0;">
+  重要なポイントや補足情報をここに入れてください。
+</blockquote>
+
+<hr style="border: none; border-top: 2px solid ${s.color}33; margin: 1.2rem 0;" />
+
+<p style="text-align: center; color: ${s.color}; font-size: 0.9em;">ご不明な点はお気軽にお問い合わせください${s.emoji}</p>`
+}
+
 type Announcement = {
   id: string
   title: string
@@ -27,7 +50,6 @@ type Announcement = {
 }
 
 export default function AnnouncementsPage() {
-  const router = useRouter()
   const [teacher, setTeacher] = useState<{ id: string; name: string } | null>(null)
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [loading, setLoading] = useState(true)
@@ -64,7 +86,7 @@ export default function AnnouncementsPage() {
   const openCreate = () => {
     setEditTarget(null)
     setTitle("")
-    setContent("")
+    setContent(teacher ? getTemplate(teacher.name) : getTemplate("青空花林"))
     setIsImportant(false)
     setIsPinned(false)
     setShowModal(true)
@@ -132,7 +154,6 @@ export default function AnnouncementsPage() {
         </button>
       </div>
 
-      {/* 一覧 */}
       {!selected && (
         <div className="space-y-2">
           {announcements.length === 0 && <p className="text-gray-400 text-sm">お知らせはまだありません</p>}
@@ -154,7 +175,6 @@ export default function AnnouncementsPage() {
         </div>
       )}
 
-      {/* 詳細 */}
       {selected && (
         <div className="bg-white border rounded-lg p-6">
           <div className="flex items-center justify-between mb-4">
@@ -176,17 +196,17 @@ export default function AnnouncementsPage() {
             .announcement-content h2 { font-size: 1.4em; font-weight: bold; margin: 0.5em 0; }
             .announcement-content ul { list-style-type: disc; padding-left: 1.5em; }
             .announcement-content ol { list-style-type: decimal; padding-left: 1.5em; }
+            .announcement-content blockquote { margin: 0.8rem 0; }
+            .announcement-content hr { margin: 1rem 0; }
           `}</style>
           <div className="announcement-content" dangerouslySetInnerHTML={{ __html: selected.content ?? "" }} />
         </div>
       )}
 
-      {/* モーダル */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <h2 className="text-lg font-bold mb-4">{editTarget ? "編集" : "新規作成"}</h2>
-
             <input
               type="text"
               value={title}
@@ -194,7 +214,6 @@ export default function AnnouncementsPage() {
               placeholder="タイトル"
               className="w-full border rounded px-3 py-2 text-sm mb-3"
             />
-
             <div className="flex gap-4 mb-3">
               <label className="flex items-center gap-2 text-sm cursor-pointer">
                 <input type="checkbox" checked={isImportant} onChange={e => setIsImportant(e.target.checked)} />
@@ -205,8 +224,6 @@ export default function AnnouncementsPage() {
                 📌 固定
               </label>
             </div>
-
-            {/* 2カラム：HTMLエディタ＋プレビュー */}
             <div className="flex gap-3 mb-4" style={{ height: "300px" }}>
               <div className="flex-1 flex flex-col">
                 <div className="text-xs text-gray-500 mb-1">HTML</div>
@@ -214,7 +231,6 @@ export default function AnnouncementsPage() {
                   value={content}
                   onChange={e => setContent(e.target.value)}
                   className="flex-1 border rounded p-2 text-sm font-mono resize-none focus:outline-none focus:border-teal-400"
-                  placeholder="<p>内容を入力</p>"
                   spellCheck={false}
                 />
               </div>
@@ -226,12 +242,13 @@ export default function AnnouncementsPage() {
                     .preview h1 { font-size: 1.8em; font-weight: bold; }
                     .preview h2 { font-size: 1.4em; font-weight: bold; }
                     .preview ul { list-style-type: disc; padding-left: 1.5em; }
+                    .preview blockquote { margin: 0.8rem 0; }
+                    .preview hr { margin: 1rem 0; }
                   `}</style>
                   <div className="preview" dangerouslySetInnerHTML={{ __html: content || "<p style='color:#aaa'>プレビュー</p>" }} />
                 </div>
               </div>
             </div>
-
             <div className="flex justify-between">
               <button onClick={() => setShowModal(false)} className="bg-gray-400 text-white text-sm px-4 py-2 rounded">閉じる</button>
               <button onClick={save} disabled={saving} className="bg-teal-500 hover:bg-teal-600 text-white text-sm px-4 py-2 rounded">

@@ -3,6 +3,21 @@
 import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabaseClient"
 
+const NEWS_TEMPLATE = `<p>お知らせの内容をここに書いてください。</p>
+
+<hr style="border: none; border-top: 2px solid #8b7cb833; margin: 1.2rem 0;" />
+
+<h2 style="color: #8b7cb8;">📢 詳細</h2>
+<p>詳しい内容をここに書いてください。</p>
+
+<blockquote style="border-left: 4px solid #8b7cb8; padding: 8px 16px; background: #f8f5ff; border-radius: 0 8px 8px 0; margin: 1rem 0;">
+  重要なポイントや補足情報をここに入れてください。
+</blockquote>
+
+<hr style="border: none; border-top: 2px solid #8b7cb833; margin: 1.2rem 0;" />
+
+<p style="text-align: center; color: #8b7cb8; font-size: 0.9em;">龍月花をご利用いただきありがとうございます🐉🌙🌸</p>`
+
 type News = {
   id: string
   title: string
@@ -41,7 +56,7 @@ export default function NewsPage() {
   const openCreate = () => {
     setEditTarget(null)
     setTitle("")
-    setContent("")
+    setContent(NEWS_TEMPLATE)
     setIsImportant(false)
     setIsPublished(false)
     setPublishedAt("")
@@ -112,15 +127,11 @@ export default function NewsPage() {
         </button>
       </div>
 
-      {/* 一覧 */}
       {!selected && (
         <div className="space-y-2">
           {news.length === 0 && <p className="text-gray-400 text-sm">ニュースはまだありません</p>}
           {news.map(n => (
-            <div
-              key={n.id}
-              className="bg-white border rounded-lg px-4 py-3 hover:border-teal-300 transition-colors"
-            >
+            <div key={n.id} className="bg-white border rounded-lg px-4 py-3 hover:border-teal-300 transition-colors">
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-2 flex-1 cursor-pointer" onClick={() => setSelected(n)}>
                   {n.is_important && <span className="text-xs bg-red-500 text-white px-2 py-0.5 rounded-full">❗ 重要</span>}
@@ -146,7 +157,6 @@ export default function NewsPage() {
         </div>
       )}
 
-      {/* 詳細 */}
       {selected && (
         <div className="bg-white border rounded-lg p-6">
           <div className="flex items-center justify-between mb-4">
@@ -170,12 +180,13 @@ export default function NewsPage() {
             .news-content h2 { font-size: 1.4em; font-weight: bold; margin: 0.5em 0; }
             .news-content ul { list-style-type: disc; padding-left: 1.5em; }
             .news-content ol { list-style-type: decimal; padding-left: 1.5em; }
+            .news-content blockquote { margin: 0.8rem 0; }
+            .news-content hr { margin: 1rem 0; }
           `}</style>
           <div className="news-content" dangerouslySetInnerHTML={{ __html: selected.content ?? "" }} />
         </div>
       )}
 
-      {/* モーダル */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -213,7 +224,6 @@ export default function NewsPage() {
                   value={content}
                   onChange={e => setContent(e.target.value)}
                   className="flex-1 border rounded p-2 text-sm font-mono resize-none focus:outline-none focus:border-teal-400"
-                  placeholder="<p>内容を入力</p>"
                   spellCheck={false}
                 />
               </div>
@@ -225,6 +235,8 @@ export default function NewsPage() {
                     .preview h1 { font-size: 1.8em; font-weight: bold; }
                     .preview h2 { font-size: 1.4em; font-weight: bold; }
                     .preview ul { list-style-type: disc; padding-left: 1.5em; }
+                    .preview blockquote { margin: 0.8rem 0; }
+                    .preview hr { margin: 1rem 0; }
                   `}</style>
                   <div className="preview" dangerouslySetInnerHTML={{ __html: content || "<p style='color:#aaa'>プレビュー</p>" }} />
                 </div>
