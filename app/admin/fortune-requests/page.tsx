@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
+import { createClient } from "@/lib/supabaseClient";
 
 type FortuneRequest = {
   id: string;
@@ -36,7 +36,8 @@ const PLAN_CONFIG: Record<string, { label: string; bg: string; color: string }> 
   premium:  { label: "プレミアム",   bg: "#fdf4ff", color: "#7e22ce" },
 };
 
-export default function FortuneRequestsPage() {
+export default function Page() {
+  const supabase = createClient();
   const [requests, setRequests] = useState<FortuneRequest[]>([]);
   const [selected, setSelected] = useState<FortuneRequest | null>(null);
   const [editResult, setEditResult] = useState("");
@@ -230,7 +231,6 @@ export default function FortuneRequestsPage() {
         </table>
       )}
 
-      {/* 鑑定文確認・編集モーダル */}
       {selected && (
         <div style={{
           position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)",
@@ -241,8 +241,6 @@ export default function FortuneRequestsPage() {
             width: "90%", maxWidth: "760px", maxHeight: "92vh", overflow: "auto",
             boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
           }}>
-
-            {/* ヘッダー */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px" }}>
               <div>
                 <h2 style={{ fontSize: "18px", fontWeight: "bold", marginBottom: "4px" }}>
@@ -267,7 +265,6 @@ export default function FortuneRequestsPage() {
               </button>
             </div>
 
-            {/* 依頼者情報 */}
             <div style={{ display: "flex", gap: "16px", marginBottom: "20px", flexWrap: "wrap" }}>
               {selected.birth_date && (
                 <div style={{ fontSize: "13px", color: "#6b7280" }}>
@@ -284,7 +281,6 @@ export default function FortuneRequestsPage() {
               </div>
             </div>
 
-            {/* 相談内容（全文） */}
             <div style={{ marginBottom: "24px" }}>
               <h3 style={{ fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "8px" }}>
                 📝 相談内容（全文）
@@ -298,7 +294,6 @@ export default function FortuneRequestsPage() {
               </div>
             </div>
 
-            {/* 鑑定文エリア */}
             <div>
               <h3 style={{ fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "8px" }}>
                 ✨ 鑑定文（編集可能）
@@ -325,7 +320,6 @@ export default function FortuneRequestsPage() {
               </div>
             </div>
 
-            {/* ボタン */}
             <div style={{ display: "flex", gap: "12px", marginTop: "20px", flexWrap: "wrap" }}>
               <button
                 onClick={() => handleSaveEdit(selected.id)}
