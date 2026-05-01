@@ -155,7 +155,7 @@ export default function Page() {
           <span>📮</span> メール鑑定 依頼一覧
         </h1>
         <button
-          onClick={loadRequests}
+          onClick={() => loadRequests()}
           style={{ padding: "6px 14px", borderRadius: "6px", border: "1px solid #d1d5db", cursor: "pointer", fontSize: "13px", background: "white" }}
         >
           🔄 更新
