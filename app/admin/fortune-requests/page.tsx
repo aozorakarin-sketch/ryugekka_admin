@@ -69,8 +69,9 @@ export default function Page() {
         updated_at: new Date().toISOString(),
       })
       .eq("id", id);
+    // ローカルのステータスを即更新してボタンを消す
+    setRequests(prev => prev.map(r => r.id === id ? { ...r, status: "sent" } : r));
     alert("送信キューに入れました。次の定期実行（〜5分）で送信されます。");
-    loadRequests();
   }
 
   async function handleRetryGeminiNow(id: string) {
@@ -83,8 +84,9 @@ export default function Page() {
         updated_at: new Date().toISOString(),
       })
       .eq("id", id);
+    // ローカルのステータスを即更新してボタンを消す
+    setRequests(prev => prev.map(r => r.id === id ? { ...r, status: "queued" } : r));
     alert("次の定期実行（〜5分）でGemini再試行します。");
-    loadRequests();
   }
 
   async function handleSaveEdit(id: string) {
