@@ -42,18 +42,34 @@ export default function Page() {
   const [selected, setSelected] = useState<FortuneRequest | null>(null);
   const [editResult, setEditResult] = useState("");
   const [loading, setLoading] = useState(true);
+  const [teacherId, setTeacherId] = useState<string | null>(null);
 
   useEffect(() => {
-    loadRequests();
+    initTeacherAndLoad();
   }, []);
 
-  async function loadRequests() {
+  async function initTeacherAndLoad() {
     setLoading(true);
-    const { data } = await supabase
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setLoading(false); return; }
+    setTeacherId(user.id);
+    await loadRequests(user.id);
+  }
+
+  async function loadRequests(tid?: string | null) {
+    setLoading(true);
+    const resolvedTid = tid !== undefined ? tid : teacherId;
+    let query = supabase
       .from("fortune_requests")
       .select("*")
       .order("created_at", { ascending: false })
       .limit(50);
+
+    if (resolvedTid) {
+      query = query.eq("teacher_id", resolvedTid);
+    }
+
+    const { data } = await query;
     setRequests(data || []);
     setLoading(false);
   }
