@@ -52,8 +52,17 @@ export default function Page() {
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
-    setTeacherId(user.id);
-    await loadRequests(user.id);
+
+    // teachersテーブルからemailでteacher_idを取得
+    const { data: teacher } = await supabase
+      .from("teachers")
+      .select("id")
+      .eq("email", user.email)
+      .maybeSingle();
+
+    const tid = teacher?.id ?? null;
+    setTeacherId(tid);
+    await loadRequests(tid);
   }
 
   async function loadRequests(tid?: string | null) {
