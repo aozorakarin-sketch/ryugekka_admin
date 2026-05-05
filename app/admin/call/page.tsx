@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { supabase } from "@/lib/supabaseClient"
+import { formatJST } from "@/lib/utils"
 
 const APP_ID = "8a10ad2855b44c9aa6cbed991ea48d86"
 
@@ -26,6 +27,8 @@ type Recording = {
   created_at: string
   recording_duration: number
 }
+
+const toUtcDate = (s: string) => new Date(s.endsWith('Z') ? s : s + 'Z')
 
 export default function CallPage() {
   const [status, setStatus] = useState<"idle" | "calling" | "connected">("idle")
@@ -277,8 +280,9 @@ export default function CallPage() {
       // consultationsテーブルに記録
       if (existing?.user_id) {
         const now = new Date()
+        // ★ UTC確定: 末尾にZを付けてブラウザのタイムゾーン誤解釈を防ぐ
         const startedAt = existing.call_started_at
-          ? new Date(existing.call_started_at)
+          ? toUtcDate(existing.call_started_at)
           : new Date(now.getTime() - duration * 1000)
 
         // ユーザー名を取得
@@ -355,11 +359,6 @@ export default function CallPage() {
     const m = Math.floor(sec / 60).toString().padStart(2, "0")
     const s = (sec % 60).toString().padStart(2, "0")
     return `${m}:${s}`
-  }
-
-  const formatDate = (s: string) => {
-    const d = new Date(s)
-    return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`
   }
 
   const formatTimeAgo = (s: string) => {
@@ -518,7 +517,7 @@ export default function CallPage() {
                 {playingId === rec.id ? "⏸" : "▶"}
               </button>
               <div className="flex-1 min-w-0">
-                <p className="text-sm text-gray-700">{formatDate(rec.created_at)}</p>
+                <p className="text-sm text-gray-700">{formatJST(rec.created_at)}</p>
                 <p className="text-xs text-gray-400">{formatTime(rec.recording_duration)}</p>
               </div>
               <button onClick={() => downloadRecording(rec)}
