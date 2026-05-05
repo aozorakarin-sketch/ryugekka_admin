@@ -9,6 +9,7 @@ const EMAIL_TO_TEACHER: Record<string, { id: string; name: string; channel: stri
   "aozora.karin@gmail.com": { id: "cd2c4101-2e24-4ae2-8d6a-507a943904af", name: "青空花林", channel: "karin" },
   "tomo517ko@gmail.com": { id: "17cf0ca1-7526-466e-a644-9d3efefa4091", name: "椎名架月", channel: "katsuki" },
   "bazvideo412@gmail.com": { id: "3ba85bb9-9065-461b-b76b-cc488d4c0c3b", name: "雲龍蓮", channel: "renren" },
+  "ohayo0840ohayo@gmail.com": { id: "e482fff7-25db-483d-8d68-46a893403be3", name: "宝明里茉", channel: "rioma" },
 }
 
 type WaitingEntry = {
@@ -109,7 +110,6 @@ export default function CallPage() {
     setTimeout(() => { setToasts(prev => prev.slice(1)) }, 6000)
   }
 
-  // ---- ミックス録音開始 ----
   const startMixedRecording = (localTrack: any, remoteTrack: any) => {
     try {
       const audioContext = new AudioContext()
@@ -136,7 +136,6 @@ export default function CallPage() {
     }
   }
 
-  // ---- Agora接続 ----
   const joinAgora = async () => {
     if (!teacherRef.current) return
     try {
@@ -208,7 +207,6 @@ export default function CallPage() {
           setCallingEntryId(null)
         }
 
-        // ポイント不足で自動終話された場合
         if (newStatus === "completed" && endReason === "point_exhausted") {
           addToast("⚠️ お客様のポイント不足で切電されました", "warning")
           await endCall()
@@ -262,11 +260,10 @@ export default function CallPage() {
     remoteTrackRef.current = null
 
     const queueId = currentQueueId || callingEntryIdRef.current
-    if (queueId) {
-      // end_reasonがpoint_exhaustedの場合は上書きしない
+    if (queueId && teacherRef.current) {
       const { data: existing } = await supabase
         .from("waiting_queue")
-        .select("end_reason")
+        .select("end_reason, user_id, call_started_at")
         .eq("id", queueId)
         .single()
 
@@ -275,6 +272,26 @@ export default function CallPage() {
           .update({ status: "completed", call_ended_at: new Date().toISOString() })
           .eq("id", queueId)
       }
+
+      // consultationsテーブルに記録
+      if (existing?.user_id && duration > 0) {
+        const now = new Date()
+        const startedAt = existing.call_started_at
+          ? new Date(existing.call_started_at)
+          : new Date(now.getTime() - duration * 1000)
+
+        await supabase.from("consultations").insert({
+          user_id: existing.user_id,
+          teacher_id: teacherRef.current.id,
+          started_at: startedAt.toISOString(),
+          ended_at: now.toISOString(),
+          call_duration: Math.floor(duration / 60),
+          price: 0,
+          teacher_name: teacherRef.current.name,
+          data_source: "ryugekka",
+        })
+      }
+
       setCurrentQueueId(null)
     }
 
