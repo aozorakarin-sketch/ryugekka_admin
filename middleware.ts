@@ -6,6 +6,7 @@ const ALLOWED_EMAILS = [
   'bazvideo412@gmail.com',
   'tomo517ko@gmail.com',
   'aozora.karin@gmail.com',
+  'ohayo0840ohayo@gmail.com'  // 追加
 ]
 
 export async function middleware(req: NextRequest) {
