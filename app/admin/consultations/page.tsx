@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabaseClient"
+import { formatJST } from "@/lib/utils"
 
 type Consultation = {
   id: string
@@ -104,12 +105,6 @@ export default function ConsultationsPage() {
     return true
   })
 
-  const formatDate = (s: string) => {
-    if (!s) return "-"
-    const d = new Date(s)
-    return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}:${d.getSeconds().toString().padStart(2, "0")}`
-  }
-
   if (loading) return <div className="p-6">読み込み中...</div>
 
   return (
@@ -163,11 +158,11 @@ export default function ConsultationsPage() {
           <tbody>
             {filtered.map((c, i) => (
               <tr key={c.id} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-                <td className="px-3 py-2 whitespace-nowrap text-xs">{formatDate(c.started_at)}</td>
-                <td className="px-3 py-2 whitespace-nowrap text-xs">{formatDate(c.ended_at)}</td>
+                <td className="px-3 py-2 whitespace-nowrap text-xs">{formatJST(c.started_at)}</td>
+                <td className="px-3 py-2 whitespace-nowrap text-xs">{formatJST(c.ended_at)}</td>
                 <td className="px-3 py-2 font-medium whitespace-nowrap">
-  {c.user_id ? <a href={`/admin/users/${c.user_id}`} className="text-blue-600 hover:underline">{c.user_name}</a> : <span>{c.user_name}</span>}
-</td>
+                  {c.user_id ? <a href={`/admin/users/${c.user_id}`} className="text-blue-600 hover:underline">{c.user_name}</a> : <span>{c.user_name}</span>}
+                </td>
                 <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-600">{c.teacher_name}</td>
                 <td className="px-3 py-2 text-center">
                   <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-xs font-medium">
