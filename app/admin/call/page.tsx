@@ -53,6 +53,7 @@ export default function CallPage() {
   const teacherRef = useRef<{ id: string; name: string; channel: string } | null>(null)
   const callingEntryIdRef = useRef<string | null>(null)
   const statusRef = useRef<"idle" | "calling" | "connected">("idle")
+  const callTimeRef = useRef<number>(0)
 
   useEffect(() => {
     initTeacher()
@@ -238,7 +239,7 @@ export default function CallPage() {
   }
 
   const endCall = async () => {
-    const duration = callTime
+    const duration = callTimeRef.current
     stopTimer()
     stopCallRing()
 
@@ -274,22 +275,34 @@ export default function CallPage() {
       }
 
       // consultationsテーブルに記録
-      if (existing?.user_id && duration > 0) {
+      if (existing?.user_id) {
         const now = new Date()
         const startedAt = existing.call_started_at
           ? new Date(existing.call_started_at)
           : new Date(now.getTime() - duration * 1000)
 
-        await supabase.from("consultations").insert({
+        // ユーザー名を取得
+        const { data: userData } = await supabase
+          .from("users")
+          .select("handle_name")
+          .eq("id", existing.user_id)
+          .single()
+
+        const { error: insertError } = await supabase.from("consultations").insert({
           user_id: existing.user_id,
           teacher_id: teacherRef.current.id,
           started_at: startedAt.toISOString(),
           ended_at: now.toISOString(),
-          call_duration: Math.floor(duration / 60),
+          call_duration: Math.max(1, Math.floor(duration / 60)),
           price: 0,
+          user_name: userData?.handle_name ?? null,
           teacher_name: teacherRef.current.name,
           data_source: "ryugekka",
         })
+
+        if (insertError) {
+          console.error("consultations INSERT エラー:", insertError)
+        }
       }
 
       setCurrentQueueId(null)
@@ -299,6 +312,7 @@ export default function CallPage() {
     setCallingEntryId(null)
     updateStatus("idle")
     setCallTime(0)
+    callTimeRef.current = 0
     setMuted(false)
 
     if (teacherRef.current) fetchWaitingList(teacherRef.current.id)
@@ -325,8 +339,12 @@ export default function CallPage() {
   }
 
   const startTimer = () => {
+    callTimeRef.current = 0
     setCallTime(0)
-    timerRef.current = setInterval(() => setCallTime(t => t + 1), 1000)
+    timerRef.current = setInterval(() => {
+      callTimeRef.current += 1
+      setCallTime(t => t + 1)
+    }, 1000)
   }
 
   const stopTimer = () => {
@@ -408,7 +426,6 @@ export default function CallPage() {
 
   return (
     <div className="p-4 max-w-2xl relative">
-      {/* トースト通知 */}
       <div style={{ position: "fixed", top: 20, right: 20, zIndex: 9999, display: "flex", flexDirection: "column", gap: 8 }}>
         {toasts.map((toast, i) => (
           <div key={i} style={{
