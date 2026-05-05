@@ -6,7 +6,12 @@ import { useEffect, useState } from "react"
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { LayoutDashboard, Users, MessageSquare, Mic, Calendar, Settings, LogOut, Star, FileText, Phone, Bell, Coins, Newspaper, HelpCircle, Mail } from "lucide-react"
 
-const ALLOWED_EMAILS = ['bazvideo412@gmail.com', 'tomo517ko@gmail.com', 'aozora.karin@gmail.com']
+const ALLOWED_EMAILS = [
+  'bazvideo412@gmail.com',
+  'tomo517ko@gmail.com',
+  'aozora.karin@gmail.com',
+  'ohayo0840ohayo@gmail.com'
+]
 
 const menuItems = [
   { title: "ダッシュボード", url: "/admin/dashboard", icon: LayoutDashboard },
