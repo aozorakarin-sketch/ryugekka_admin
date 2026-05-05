@@ -1,3 +1,10 @@
+import { clsx, type ClassValue } from "clsx"
+import { twMerge } from "tailwind-merge"
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
+}
+
 export const formatJST = (s: string) => {
   if (!s) return "-"
   const utc = s.endsWith('Z') ? s : s + 'Z'
