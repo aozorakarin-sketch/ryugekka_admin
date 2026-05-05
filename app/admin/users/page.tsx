@@ -37,7 +37,7 @@ export default function UsersPage() {
           consultations(ended_at),
           follow_mails(count)
         `)
-        .eq("data_source", "minden")
+        .neq("data_source", "dummy")
         .range(from, from + 999)
 
       if (error || !data || data.length === 0) break
