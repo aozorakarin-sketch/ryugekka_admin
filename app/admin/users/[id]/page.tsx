@@ -153,6 +153,7 @@ export default function UserDetailPage() {
 
   const [myTeacherId, setMyTeacherId] = useState<string | null>(null)
   const [isAssigned, setIsAssigned] = useState(false)
+  const [userPoints, setUserPoints] = useState<{ teacher_id: string; points: number }[]>([])
 
   useEffect(() => {
     fetchAll()
@@ -269,6 +270,13 @@ export default function UserDetailPage() {
     setReviewCount(rCount ?? 0)
     setReviewLastAt(rData?.[0]?.created_at ?? null)
 
+    // user_points（全先生分）
+    const { data: pointsData } = await supabase
+      .from("user_points")
+      .select("teacher_id, points")
+      .eq("user_id", id)
+    setUserPoints(pointsData ?? [])
+
     setLoading(false)
   }
 
@@ -335,7 +343,7 @@ export default function UserDetailPage() {
   }
 
   const totalMinutes = consultations.reduce((s, c) => s + (c.call_duration ?? 0), 0)
-  const totalPrice = consultations.reduce((s, c) => s + (c.price ?? 0), 0)
+  const totalConsumedPt = consultations.reduce((s, c) => s + (c.price ?? 0), 0)
   const avgMinutes = consultations.length > 0 ? (totalMinutes / consultations.length).toFixed(1) : "0"
   const firstAt = consultations.length > 0 ? consultations[consultations.length - 1].started_at : null
   const lastAt = consultations.length > 0 ? consultations[0].started_at : null
@@ -371,9 +379,26 @@ export default function UserDetailPage() {
                 <div className="flex justify-between"><span>回数</span><span className="bg-blue-100 text-blue-800 px-2 rounded-full text-xs font-medium">{consultations.length}回</span></div>
                 <div className="flex justify-between"><span>合計分数</span><span>{totalMinutes}分</span></div>
                 <div className="flex justify-between"><span>平均分数</span><span>{avgMinutes}分</span></div>
-                <div className="flex justify-between"><span>合計報酬</span><span className="font-bold text-pink-700">{totalPrice.toLocaleString()}円</span></div>
+                <div className="flex justify-between"><span>消費pt合計</span><span className="font-bold text-pink-700">{totalConsumedPt.toLocaleString()}pt</span></div>
                 <div className="flex justify-between"><span>最終日時</span><span className="text-xs">{formatDate(lastAt)}</span></div>
                 <div className="flex justify-between"><span>初回日時</span><span className="text-xs">{formatDate(firstAt)}</span></div>
+              </div>
+            </div>
+
+            <div className="bg-green-50 rounded p-3">
+              <div className="font-medium text-green-800 mb-2">保有ポイント</div>
+              <div className="space-y-1 text-gray-700">
+                {userPoints.length === 0 && (
+                  <div className="text-xs text-gray-400">ポイントなし</div>
+                )}
+                {userPoints.map(up => (
+                  <div key={up.teacher_id} className="flex justify-between">
+                    <span className="text-xs">{TEACHER_MAP[up.teacher_id] ?? up.teacher_id}</span>
+                    <span className="font-bold text-green-700">{up.points.toLocaleString()}pt</span>
+                  </div>
+                ))}
+              </div>
+            </div>
               </div>
             </div>
 
@@ -462,7 +487,7 @@ export default function UserDetailPage() {
                   <th className="text-left px-3 py-2 font-medium whitespace-nowrap">終了日時</th>
                   <th className="text-left px-3 py-2 font-medium whitespace-nowrap">先生</th>
                   <th className="text-center px-3 py-2 font-medium whitespace-nowrap">分数</th>
-                  <th className="text-center px-3 py-2 font-medium whitespace-nowrap">報酬</th>
+                  <th className="text-center px-3 py-2 font-medium whitespace-nowrap">消費pt</th>
                   <th className="text-center px-3 py-2 font-medium whitespace-nowrap">音声</th>
                   <th className="text-center px-3 py-2 font-medium whitespace-nowrap">鑑定メモ</th>
                 </tr>
@@ -474,7 +499,7 @@ export default function UserDetailPage() {
                     <td className="px-3 py-2 whitespace-nowrap text-xs">{formatDate(c.ended_at)}</td>
                     <td className="px-3 py-2 text-xs">{TEACHER_MAP[c.teacher_id] ?? "-"}</td>
                     <td className="px-3 py-2 text-center">{c.call_duration}分</td>
-                    <td className="px-3 py-2 text-center">{(c.price ?? 0).toLocaleString()}円</td>
+                    <td className="px-3 py-2 text-center">{(c.price ?? 0).toLocaleString()}pt</td>
                     <td className="px-3 py-2 text-center">
                       {c.recording_url
                         ? <a href={c.recording_url} target="_blank" className="text-blue-600 hover:underline text-xs">再生</a>
