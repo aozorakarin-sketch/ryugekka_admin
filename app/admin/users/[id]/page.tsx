@@ -466,7 +466,7 @@ export default function UserDetailPage() {
                     <td className="px-3 py-2 whitespace-nowrap text-xs">{formatDate(c.ended_at)}</td>
                     <td className="px-3 py-2 text-xs">{TEACHER_MAP[c.teacher_id] ?? "-"}</td>
                     <td className="px-3 py-2 text-center">{c.call_duration}分</td>
-                    <td className="px-3 py-2 text-center">{c.price.toLocaleString()}円</td>
+                    <td className="px-3 py-2 text-center">{(c.price ?? 0).toLocaleString()}円</td>
                     <td className="px-3 py-2 text-center">
                       {c.recording_url
                         ? <a href={c.recording_url} target="_blank" className="text-blue-600 hover:underline text-xs">再生</a>
