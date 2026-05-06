@@ -53,6 +53,8 @@ export default function CallPage() {
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const callRingRef = useRef<HTMLAudioElement | null>(null)
+  const alertRingRef = useRef<HTMLAudioElement | null>(null)       // 2分後アラート用
+  const alertTimerRef = useRef<NodeJS.Timeout | null>(null)        // 2分タイマー
   const teacherRef = useRef<{ id: string; name: string; channel: string } | null>(null)
   const callingEntryIdRef = useRef<string | null>(null)
   const statusRef = useRef<"idle" | "calling" | "connected">("idle")
@@ -63,6 +65,8 @@ export default function CallPage() {
     return () => {
       stopTimer()
       stopCallRing()
+      stopAlertRing()
+      clearAlertTimer()
       if (audioContextRef.current) audioContextRef.current.close()
     }
   }, [])
@@ -106,6 +110,41 @@ export default function CallPage() {
       callRingRef.current.pause()
       callRingRef.current.currentTime = 0
       callRingRef.current = null
+    }
+  }
+
+  // 2分後アラートコール音
+  const playAlertRing = () => {
+    const audio = new Audio("/sounds/call_ring.mp3")
+    audio.loop = true
+    audio.play().catch(err => console.error("アラートコール音エラー:", err))
+    alertRingRef.current = audio
+  }
+
+  const stopAlertRing = () => {
+    if (alertRingRef.current) {
+      alertRingRef.current.pause()
+      alertRingRef.current.currentTime = 0
+      alertRingRef.current = null
+    }
+  }
+
+  // 2分タイマー：お客様が来てから2分後にコール音を鳴らす
+  const startAlertTimer = () => {
+    clearAlertTimer()
+    alertTimerRef.current = setTimeout(() => {
+      // まだ idle（通話開始していない）なら鳴らす
+      if (statusRef.current === "idle") {
+        playAlertRing()
+        addToast("⏰ お客様が2分以上お待ちです！", "warning")
+      }
+    }, 2 * 60 * 1000)
+  }
+
+  const clearAlertTimer = () => {
+    if (alertTimerRef.current) {
+      clearTimeout(alertTimerRef.current)
+      alertTimerRef.current = null
     }
   }
 
@@ -186,6 +225,7 @@ export default function CallPage() {
         playNotification()
         addToast("📞 新しいお客様が来ました！")
         fetchWaitingList(teacherId)
+        startAlertTimer() // お客様が来たら2分タイマー開始
       })
       .on("postgres_changes", {
         event: "UPDATE", schema: "public", table: "waiting_queue",
@@ -197,6 +237,8 @@ export default function CallPage() {
 
         if (newStatus === "in_call" && entryId === callingEntryIdRef.current && statusRef.current === "calling") {
           stopCallRing()
+          stopAlertRing()
+          clearAlertTimer()
           updateStatus("connected")
           setCurrentQueueId(entryId)
           await new Promise(resolve => setTimeout(resolve, 500))
@@ -234,6 +276,8 @@ export default function CallPage() {
 
   const startCallToCustomer = async (entryId: string) => {
     if (!teacherRef.current) return
+    stopAlertRing()      // コール音を止める
+    clearAlertTimer()    // タイマーもクリア
     await supabase.from("waiting_queue").update({ status: "calling" }).eq("id", entryId)
     callingEntryIdRef.current = entryId
     setCallingEntryId(entryId)
@@ -245,6 +289,8 @@ export default function CallPage() {
     const duration = callTimeRef.current
     stopTimer()
     stopCallRing()
+    stopAlertRing()
+    clearAlertTimer()
 
     if (recorderRef.current && recorderRef.current.state !== "inactive") {
       recorderRef.current.stop()
@@ -277,15 +323,12 @@ export default function CallPage() {
           .eq("id", queueId)
       }
 
-      // consultationsテーブルに記録
       if (existing?.user_id) {
         const now = new Date()
-        // ★ UTC確定: 末尾にZを付けてブラウザのタイムゾーン誤解釈を防ぐ
         const startedAt = existing.call_started_at
           ? toUtcDate(existing.call_started_at)
           : new Date(now.getTime() - duration * 1000)
 
-        // ユーザー名を取得
         const { data: userData } = await supabase
           .from("users")
           .select("handle_name")
@@ -428,13 +471,10 @@ export default function CallPage() {
       <div style={{ position: "fixed", top: 20, right: 20, zIndex: 9999, display: "flex", flexDirection: "column", gap: 8 }}>
         {toasts.map((toast, i) => (
           <div key={i} style={{
-            background: "#fff",
-            borderRadius: 12,
+            background: "#fff", borderRadius: 12,
             boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
             border: toast.type === 'warning' ? "1px solid #ffcccc" : "1px solid #d1fae5",
-            padding: "12px 16px",
-            fontSize: "0.9rem",
-            fontWeight: 600,
+            padding: "12px 16px", fontSize: "0.9rem", fontWeight: 600,
             color: toast.type === 'warning' ? "#c0392b" : "#065f46",
           }}>{toast.message}</div>
         ))}
