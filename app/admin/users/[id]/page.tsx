@@ -151,7 +151,6 @@ export default function UserDetailPage() {
   const [saving, setSaving] = useState(false)
   const [savingProfile, setSavingProfile] = useState(false)
 
-  // 権限管理
   const [myTeacherId, setMyTeacherId] = useState<string | null>(null)
   const [isAssigned, setIsAssigned] = useState(false)
 
@@ -160,7 +159,6 @@ export default function UserDetailPage() {
   }, [id])
 
   const fetchAll = async () => {
-    // ログイン中の先生IDを取得
     const { data: { user } } = await supabase.auth.getUser()
     let teacherId: string | null = null
 
@@ -182,6 +180,13 @@ export default function UserDetailPage() {
       .single()
     setHandleName(userData?.handle_name ?? "-")
 
+    // 先生の料金マップを取得
+    const { data: teachersData } = await supabase
+      .from("teachers")
+      .select("id, price_per_min")
+    const priceMap: Record<string, number> = {}
+    teachersData?.forEach(t => { priceMap[t.id] = t.price_per_min ?? 0 })
+
     // 鑑定履歴（全先生分）
     const { data: cons } = await supabase
       .from("consultations")
@@ -191,10 +196,14 @@ export default function UserDetailPage() {
     const consultationList = (cons ?? []).map((c: any) => ({
       ...c,
       recording_url: c.call_recordings?.[0]?.recording_url ?? null,
+      // price が入っていれば使う、なければ call_duration × price_per_min で計算
+      price: (c.price != null && c.price > 0)
+        ? c.price
+        : (c.call_duration ?? 0) * (priceMap[c.teacher_id] ?? 0),
     }))
     setConsultations(consultationList)
 
-    // 担当先生かどうか判定（自分のteacher_idの鑑定履歴があるか）
+    // 担当先生かどうか判定
     if (teacherId) {
       const assigned = consultationList.some(c => c.teacher_id === teacherId)
       setIsAssigned(assigned)
@@ -231,7 +240,7 @@ export default function UserDetailPage() {
       .from("user_profiles")
       .select("birth_date, gender")
       .eq("user_id", id)
-      .single()
+      .maybeSingle()
     if (profileData) {
       setProfile({
         birth_date: profileData.birth_date ?? "",
@@ -306,7 +315,7 @@ export default function UserDetailPage() {
       .from("user_profiles")
       .select("user_id")
       .eq("user_id", id)
-      .single()
+      .maybeSingle()
 
     if (existing) {
       await supabase.from("user_profiles").update({
@@ -326,6 +335,7 @@ export default function UserDetailPage() {
   }
 
   const totalMinutes = consultations.reduce((s, c) => s + (c.call_duration ?? 0), 0)
+  const totalPrice = consultations.reduce((s, c) => s + (c.price ?? 0), 0)
   const avgMinutes = consultations.length > 0 ? (totalMinutes / consultations.length).toFixed(1) : "0"
   const firstAt = consultations.length > 0 ? consultations[consultations.length - 1].started_at : null
   const lastAt = consultations.length > 0 ? consultations[0].started_at : null
@@ -348,7 +358,6 @@ export default function UserDetailPage() {
           <h2 className="font-bold text-lg mb-1">{handleName}</h2>
           <a href="/admin/users" className="text-xs text-gray-400 hover:underline">← 一覧に戻る</a>
 
-          {/* 担当先生でない場合の注意表示 */}
           {!isAssigned && (
             <div className="mt-2 text-xs text-amber-600 bg-amber-50 rounded p-2">
               閲覧のみ（担当外）
@@ -362,6 +371,7 @@ export default function UserDetailPage() {
                 <div className="flex justify-between"><span>回数</span><span className="bg-blue-100 text-blue-800 px-2 rounded-full text-xs font-medium">{consultations.length}回</span></div>
                 <div className="flex justify-between"><span>合計分数</span><span>{totalMinutes}分</span></div>
                 <div className="flex justify-between"><span>平均分数</span><span>{avgMinutes}分</span></div>
+                <div className="flex justify-between"><span>合計報酬</span><span className="font-bold text-pink-700">{totalPrice.toLocaleString()}円</span></div>
                 <div className="flex justify-between"><span>最終日時</span><span className="text-xs">{formatDate(lastAt)}</span></div>
                 <div className="flex justify-between"><span>初回日時</span><span className="text-xs">{formatDate(firstAt)}</span></div>
               </div>
@@ -374,9 +384,7 @@ export default function UserDetailPage() {
                   onClick={saveProfile}
                   disabled={savingProfile || !isAssigned}
                   className={`text-xs px-2 py-0.5 rounded text-white ${
-                    isAssigned
-                      ? "bg-purple-500 hover:bg-purple-600"
-                      : "bg-gray-300 cursor-not-allowed"
+                    isAssigned ? "bg-purple-500 hover:bg-purple-600" : "bg-gray-300 cursor-not-allowed"
                   }`}
                 >
                   {savingProfile ? "保存中..." : "保存"}
@@ -489,9 +497,7 @@ export default function UserDetailPage() {
               onClick={saveMemo}
               disabled={saving || !isAssigned}
               className={`text-sm px-4 py-1.5 rounded text-white ${
-                isAssigned
-                  ? "bg-teal-500 hover:bg-teal-600"
-                  : "bg-gray-300 cursor-not-allowed"
+                isAssigned ? "bg-teal-500 hover:bg-teal-600" : "bg-gray-300 cursor-not-allowed"
               }`}
             >
               {saving ? "保存中..." : "更新"}
