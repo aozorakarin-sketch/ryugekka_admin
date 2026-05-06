@@ -19,6 +19,8 @@ type WaitingEntry = {
   status: string
   requested_at: string
   agora_channel: string
+  user_name: string | null
+  consultation_count: number
 }
 
 type Recording = {
@@ -270,8 +272,24 @@ export default function CallPage() {
       .eq("teacher_id", teacherId)
       .eq("status", "waiting")
       .order("requested_at", { ascending: true })
-    setWaitingList(data ?? [])
-    setWaitingCount(data?.length ?? 0)
+
+    if (!data) { setWaitingList([]); setWaitingCount(0); return }
+
+    // ユーザー名と鑑定回数を取得
+    const enriched = await Promise.all(data.map(async (entry) => {
+      const [{ data: userData }, { count }] = await Promise.all([
+        supabase.from("users").select("handle_name").eq("id", entry.user_id).single(),
+        supabase.from("consultations").select("*", { count: "exact", head: true }).eq("user_id", entry.user_id),
+      ])
+      return {
+        ...entry,
+        user_name: userData?.handle_name ?? null,
+        consultation_count: count ?? 0,
+      }
+    }))
+
+    setWaitingList(enriched)
+    setWaitingCount(enriched.length)
   }
 
   const startCallToCustomer = async (entryId: string) => {
@@ -528,7 +546,23 @@ export default function CallPage() {
                   {index + 1}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-gray-700 font-medium">お客様</p>
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={`/admin/users/${entry.user_id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-blue-600 hover:underline font-medium"
+                    >
+                      {entry.user_name ?? "お客様"}
+                    </a>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
+                      entry.consultation_count === 0
+                        ? "bg-green-100 text-green-700"
+                        : "bg-blue-100 text-blue-700"
+                    }`}>
+                      {entry.consultation_count === 0 ? "新規" : `リピーター(${entry.consultation_count}回)`}
+                    </span>
+                  </div>
                   <p className="text-xs text-gray-400">{formatTimeAgo(entry.requested_at)}</p>
                 </div>
                 {status === "idle" && (
