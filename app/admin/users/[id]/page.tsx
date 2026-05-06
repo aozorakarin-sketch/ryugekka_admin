@@ -399,8 +399,6 @@ export default function UserDetailPage() {
                 ))}
               </div>
             </div>
-              </div>
-            </div>
 
             <div className="bg-purple-50 rounded p-3">
               <div className="flex items-center justify-between mb-2">
