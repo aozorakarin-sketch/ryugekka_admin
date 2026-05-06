@@ -11,6 +11,7 @@ const EMAIL_TO_TEACHER: Record<string, { id: string; name: string }> = {
 
 type WaitingEntry = {
   id: string
+  user_name: string | null
   estimated_wait_min: number
   requested_at: string
   data_source: string
@@ -40,7 +41,7 @@ export default function WaitingPage() {
     setLoading(true)
     const { data } = await supabase
       .from("waiting_queue")
-      .select("id, estimated_wait_min, requested_at, data_source")
+      .select("id, user_name, estimated_wait_min, requested_at, data_source")
       .eq("teacher_id", teacherId)
       .eq("status", "waiting")
       .order("requested_at", { ascending: true })
@@ -79,6 +80,7 @@ export default function WaitingPage() {
     } else {
       await supabase.from("waiting_queue").insert({
         teacher_id: teacher.id,
+        user_name: "ダミーユーザー",
         status: "waiting",
         requested_at: new Date().toISOString(),
         estimated_wait_min: waitMin,
@@ -150,7 +152,7 @@ export default function WaitingPage() {
             <div className="flex items-center gap-4">
               <span className="text-2xl font-bold text-gray-300">{index + 1}</span>
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 mb-1">
                   <span className={`text-xs px-2 py-0.5 rounded-full ${
                     entry.data_source === "dummy"
                       ? "bg-gray-100 text-gray-500"
@@ -158,8 +160,11 @@ export default function WaitingPage() {
                   }`}>
                     {entry.data_source === "dummy" ? "ダミー" : "リアル"}
                   </span>
-                  <span className="font-medium text-gray-700">{entry.estimated_wait_min}分待ち</span>
+                  <span className="font-medium text-gray-800">
+                    {entry.user_name ?? "名前なし"}
+                  </span>
                 </div>
+                <span className="text-sm text-gray-500">{entry.estimated_wait_min}分待ち</span>
               </div>
             </div>
             <div className="flex gap-2">
