@@ -155,6 +155,7 @@ export default function UserDetailPage() {
   const [myTeacherId, setMyTeacherId] = useState<string | null>(null)
   const [isAssigned, setIsAssigned] = useState(false)
   const [userPoints, setUserPoints] = useState<{ teacher_id: string; points: number }[]>([])
+  const [playingId, setPlayingId] = useState<string | null>(null)
 
   useEffect(() => {
     fetchAll()
@@ -367,6 +368,27 @@ export default function UserDetailPage() {
     return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`
   }
 
+  const buildFileName = (started_at: string) => {
+    const d = new Date(started_at)
+    const y = d.getFullYear()
+    const mo = String(d.getMonth() + 1).padStart(2, "0")
+    const day = String(d.getDate()).padStart(2, "0")
+    const h = String(d.getHours()).padStart(2, "0")
+    const min = String(d.getMinutes()).padStart(2, "0")
+    return `${handleName}_${y}${mo}${day}_${h}${min}.webm`
+  }
+
+  const handleDownload = async (signedUrl: string, started_at: string) => {
+    const res = await fetch(signedUrl)
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = buildFileName(started_at)
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   const selectClass = (disabled: boolean) =>
     `w-full border rounded px-2 py-1 mt-1 text-sm ${disabled ? "bg-gray-100 text-gray-400 cursor-not-allowed" : "bg-white"}`
 
@@ -512,11 +534,31 @@ export default function UserDetailPage() {
                     <td className="px-3 py-2 text-center">{c.call_duration}分</td>
                     <td className="px-3 py-2 text-center">{(c.price ?? 0).toLocaleString()}pt</td>
                     <td className="px-3 py-2 text-center">
-                      {c.signed_url
-                        ? <a href={c.signed_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-xs">再生</a>
-                        : c.recording_url
-                          ? <span className="text-gray-400 text-xs">読込中</span>
-                          : <span className="text-gray-400 text-xs">-</span>}
+                      {c.signed_url ? (
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            onClick={() => setPlayingId(playingId === c.id ? null : c.id)}
+                            className="text-xs bg-teal-500 hover:bg-teal-600 text-white px-2 py-0.5 rounded"
+                          >{playingId === c.id ? "⏸" : "▶"}</button>
+                          <button
+                            onClick={() => handleDownload(c.signed_url!, c.started_at)}
+                            className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-0.5 rounded"
+                          >⬇</button>
+                        </div>
+                      ) : c.recording_url ? (
+                        <span className="text-gray-400 text-xs">読込中</span>
+                      ) : (
+                        <span className="text-gray-400 text-xs">-</span>
+                      )}
+                      {playingId === c.id && c.signed_url && (
+                        <audio
+                          src={c.signed_url}
+                          autoPlay
+                          controls
+                          onEnded={() => setPlayingId(null)}
+                          className="mt-1 w-40"
+                        />
+                      )}
                     </td>
                     <td className="px-3 py-2 text-center">
                       <button className="text-xs bg-amber-500 hover:bg-amber-600 text-white px-2 py-0.5 rounded">入</button>
