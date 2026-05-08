@@ -32,6 +32,9 @@ export default function ConsultationModal({ consultation, userName, teacherName,
   const [summarizing, setSummarizing] = useState(false)
   const [summarizeError, setSummarizeError] = useState<string | null>(null)
   const [summarizeDone, setSummarizeDone] = useState(false)
+  const [generatingAfter, setGeneratingAfter] = useState(false)
+  const [afterError, setAfterError] = useState<string | null>(null)
+  const [afterDone, setAfterDone] = useState(false)
 
   // 既存の文字起こしを取得
   useEffect(() => {
@@ -127,6 +130,38 @@ export default function ConsultationModal({ consultation, userName, teacherName,
       setSummarizeError(err.message)
     } finally {
       setSummarizing(false)
+    }
+  }
+
+  // アフターメッセージを作る
+  const handleGenerateAfterMessage = async () => {
+    setGeneratingAfter(true)
+    setAfterError(null)
+    setAfterDone(false)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-after-message`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session?.access_token}`,
+          },
+          body: JSON.stringify({
+            consultation_id: consultation.id,
+            teacher_id: consultation.teacher_id,
+            user_id: userId,
+          }),
+        }
+      )
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setAfterDone(true)
+    } catch (err: any) {
+      setAfterError(err.message)
+    } finally {
+      setGeneratingAfter(false)
     }
   }
 
@@ -243,6 +278,19 @@ export default function ConsultationModal({ consultation, userName, teacherName,
           {summarizeDone && (
             <div className="text-xs text-green-600 bg-green-50 p-2 rounded">✅ 要約をメモに追記しました！</div>
           )}
+          {afterError && (
+            <div className="text-xs text-red-500 bg-red-50 p-2 rounded">{afterError}</div>
+          )}
+          {afterDone && (
+            <div className="text-xs text-green-600 bg-green-50 p-2 rounded">
+              ✅ アフターメッセージを下書き保存しました！
+              <a
+                href={`/admin/follow-mails/new/${userId}`}
+                className="ml-2 underline text-blue-600"
+                target="_blank"
+              >確認・送信 →</a>
+            </div>
+          )}
           <div className="flex gap-2">
             <button
               disabled={!hasTranscript || !hasGeminiKey || summarizing}
@@ -257,14 +305,16 @@ export default function ConsultationModal({ consultation, userName, teacherName,
               {summarizing ? "⌛ 生成中..." : "📋 要約を作る"}
             </button>
             <button
-              disabled={!hasTranscript}
+              disabled={!hasTranscript || !hasGeminiKey || generatingAfter}
+              onClick={handleGenerateAfterMessage}
+              title={!hasGeminiKey ? "Gemini APIキーが設定されていません" : ""}
               className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
-                hasTranscript
+                hasTranscript && hasGeminiKey
                   ? "bg-amber-500 hover:bg-amber-600 text-white"
                   : "bg-gray-200 text-gray-400 cursor-not-allowed"
               }`}
             >
-              ✉️ アフターメッセージを作る
+              {generatingAfter ? "⌛ 生成中..." : "✉️ アフターメッセージを作る"}
             </button>
           </div>
 
