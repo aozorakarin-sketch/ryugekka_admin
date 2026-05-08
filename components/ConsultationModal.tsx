@@ -18,15 +18,20 @@ type Props = {
   consultation: Consultation
   userName: string
   teacherName: string
+  userId: string
   hasApiKey: boolean
+  hasGeminiKey: boolean
   onClose: () => void
 }
 
-export default function ConsultationModal({ consultation, userName, teacherName, hasApiKey, onClose }: Props) {
+export default function ConsultationModal({ consultation, userName, teacherName, userId, hasApiKey, hasGeminiKey, onClose }: Props) {
   const [transcript, setTranscript] = useState<string>("")
   const [transcribing, setTranscribing] = useState(false)
   const [transcriptError, setTranscriptError] = useState<string | null>(null)
   const [uploadingText, setUploadingText] = useState(false)
+  const [summarizing, setSummarizing] = useState(false)
+  const [summarizeError, setSummarizeError] = useState<string | null>(null)
+  const [summarizeDone, setSummarizeDone] = useState(false)
 
   // 既存の文字起こしを取得
   useEffect(() => {
@@ -51,11 +56,18 @@ export default function ConsultationModal({ consultation, userName, teacherName,
     setTranscribing(true)
     setTranscriptError(null)
     try {
-      const res = await fetch("/api/transcribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ consultation_id: consultation.id }),
-      })
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/transcribe`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session?.access_token}`,
+          },
+          body: JSON.stringify({ consultation_id: consultation.id }),
+        }
+      )
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setTranscript(data.transcript)
@@ -83,6 +95,38 @@ export default function ConsultationModal({ consultation, userName, teacherName,
       }
     } finally {
       setUploadingText(false)
+    }
+  }
+
+  // 要約を作る
+  const handleSummarize = async () => {
+    setSummarizing(true)
+    setSummarizeError(null)
+    setSummarizeDone(false)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/summarize`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session?.access_token}`,
+          },
+          body: JSON.stringify({
+            consultation_id: consultation.id,
+            teacher_id: consultation.teacher_id,
+            user_id: userId,
+          }),
+        }
+      )
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setSummarizeDone(true)
+    } catch (err: any) {
+      setSummarizeError(err.message)
+    } finally {
+      setSummarizing(false)
     }
   }
 
@@ -193,16 +237,24 @@ export default function ConsultationModal({ consultation, userName, teacherName,
           </div>
 
           {/* 要約・アフターメッセージ */}
+          {summarizeError && (
+            <div className="text-xs text-red-500 bg-red-50 p-2 rounded">{summarizeError}</div>
+          )}
+          {summarizeDone && (
+            <div className="text-xs text-green-600 bg-green-50 p-2 rounded">✅ 要約をメモに追記しました！</div>
+          )}
           <div className="flex gap-2">
             <button
-              disabled={!hasTranscript}
+              disabled={!hasTranscript || !hasGeminiKey || summarizing}
+              onClick={handleSummarize}
+              title={!hasGeminiKey ? "Gemini APIキーが設定されていません" : ""}
               className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
-                hasTranscript
+                hasTranscript && hasGeminiKey
                   ? "bg-purple-500 hover:bg-purple-600 text-white"
                   : "bg-gray-200 text-gray-400 cursor-not-allowed"
               }`}
             >
-              📋 要約を作る
+              {summarizing ? "⌛ 生成中..." : "📋 要約を作る"}
             </button>
             <button
               disabled={!hasTranscript}
