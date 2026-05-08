@@ -157,6 +157,8 @@ export default function UserDetailPage() {
   const [isAssigned, setIsAssigned] = useState(false)
   const [userPoints, setUserPoints] = useState<{ teacher_id: string; points: number }[]>([])
   const [hasApiKey, setHasApiKey] = useState(false)
+  const [hasGeminiKey, setHasGeminiKey] = useState(false)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [selectedConsultation, setSelectedConsultation] = useState<Consultation | null>(null)
 
   useEffect(() => {
@@ -170,13 +172,15 @@ export default function UserDetailPage() {
     if (user?.email) {
       const { data: teacher } = await supabase
         .from("teachers")
-        .select("id, openai_api_key")
+        .select("id, openai_api_key, gemini_api_key")
         .eq("email", user.email)
         .single()
       teacherId = teacher?.id ?? null
       setMyTeacherId(teacherId)
       setHasApiKey(!!teacher?.openai_api_key)
+      setHasGeminiKey(!!teacher?.gemini_api_key)
     }
+    setCurrentUserId(user?.id ?? null)
 
     // ユーザー名
     const { data: userData } = await supabase
@@ -679,7 +683,9 @@ export default function UserDetailPage() {
         consultation={selectedConsultation}
         userName={handleName}
         teacherName={TEACHER_MAP[selectedConsultation.teacher_id] ?? "-"}
+        userId={String(id)}
         hasApiKey={hasApiKey}
+        hasGeminiKey={hasGeminiKey}
         onClose={() => setSelectedConsultation(null)}
       />
     )}
