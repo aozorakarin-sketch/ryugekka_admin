@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 import { supabase } from "@/lib/supabaseClient"
+import ConsultationModal from "@/components/ConsultationModal"
 
 const TEACHER_MAP: Record<string, string> = {
   "e482fff7-25db-483d-8d68-46a893403be3": "宝明里茉",
@@ -155,7 +156,8 @@ export default function UserDetailPage() {
   const [myTeacherId, setMyTeacherId] = useState<string | null>(null)
   const [isAssigned, setIsAssigned] = useState(false)
   const [userPoints, setUserPoints] = useState<{ teacher_id: string; points: number }[]>([])
-  const [playingId, setPlayingId] = useState<string | null>(null)
+  const [hasApiKey, setHasApiKey] = useState(false)
+  const [selectedConsultation, setSelectedConsultation] = useState<Consultation | null>(null)
 
   useEffect(() => {
     fetchAll()
@@ -168,11 +170,12 @@ export default function UserDetailPage() {
     if (user?.email) {
       const { data: teacher } = await supabase
         .from("teachers")
-        .select("id")
+        .select("id, openai_api_key")
         .eq("email", user.email)
         .single()
       teacherId = teacher?.id ?? null
       setMyTeacherId(teacherId)
+      setHasApiKey(!!teacher?.openai_api_key)
     }
 
     // ユーザー名
@@ -534,34 +537,15 @@ export default function UserDetailPage() {
                     <td className="px-3 py-2 text-center">{c.call_duration}分</td>
                     <td className="px-3 py-2 text-center">{(c.price ?? 0).toLocaleString()}pt</td>
                     <td className="px-3 py-2 text-center">
-                      {c.signed_url ? (
-                        <div className="flex items-center justify-center gap-1">
-                          <button
-                            onClick={() => setPlayingId(playingId === c.id ? null : c.id)}
-                            className="text-xs bg-teal-500 hover:bg-teal-600 text-white px-2 py-0.5 rounded"
-                          >{playingId === c.id ? "⏸" : "▶"}</button>
-                          <button
-                            onClick={() => handleDownload(c.signed_url!, c.started_at)}
-                            className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-0.5 rounded"
-                          >⬇</button>
-                        </div>
-                      ) : c.recording_url ? (
-                        <span className="text-gray-400 text-xs">読込中</span>
-                      ) : (
-                        <span className="text-gray-400 text-xs">-</span>
-                      )}
-                      {playingId === c.id && c.signed_url && (
-                        <audio
-                          src={c.signed_url}
-                          autoPlay
-                          controls
-                          onEnded={() => setPlayingId(null)}
-                          className="mt-1 w-40"
-                        />
-                      )}
+                      {c.signed_url
+                        ? <span className="text-xs text-teal-600 font-medium">🎵 あり</span>
+                        : <span className="text-gray-400 text-xs">-</span>}
                     </td>
                     <td className="px-3 py-2 text-center">
-                      <button className="text-xs bg-amber-500 hover:bg-amber-600 text-white px-2 py-0.5 rounded">入</button>
+                      <button
+                        onClick={() => setSelectedConsultation(c)}
+                        className="text-xs bg-amber-500 hover:bg-amber-600 text-white px-2 py-0.5 rounded"
+                      >入</button>
                     </td>
                   </tr>
                 ))}
@@ -688,5 +672,15 @@ export default function UserDetailPage() {
         </div>
       </div>
     </div>
+
+    {selectedConsultation && (
+      <ConsultationModal
+        consultation={selectedConsultation}
+        userName={handleName}
+        teacherName={TEACHER_MAP[selectedConsultation.teacher_id] ?? "-"}
+        hasApiKey={hasApiKey}
+        onClose={() => setSelectedConsultation(null)}
+      />
+    )}
   )
 }
