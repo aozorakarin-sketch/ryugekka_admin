@@ -1,144 +1,93 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useParams, useRouter } from "next/navigation"
+import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { supabase } from "@/lib/supabaseClient"
 
-const EMAIL_TO_TEACHER: Record<string, { id: string; name: string }> = {
-  "aozora.karin@gmail.com": { id: "cd2c4101-2e24-4ae2-8d6a-507a943904af", name: "青空花林" },
-  "tomo517ko@gmail.com": { id: "17cf0ca1-7526-466e-a644-9d3efefa4091", name: "椎名架月" },
-  "bazvideo412@gmail.com": { id: "3ba85bb9-9065-461b-b76b-cc488d4c0c3b", name: "雲龍蓮" },
-}
-
-type Template = {
-  id: string
-  title: string
-  body: string
-}
-
-export default function FollowMailNewPage() {
+export default function FollowMailConfirmPage() {
   const { userId } = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const draftId = searchParams.get("draftId")
+
   const [handleName, setHandleName] = useState("")
-  const [teacher, setTeacher] = useState<{ id: string; name: string } | null>(null)
-  const [templates, setTemplates] = useState<Template[]>([])
-  const [selectedTemplateId, setSelectedTemplateId] = useState("")
+  const [subject, setSubject] = useState("")
   const [content, setContent] = useState("")
-  const [saving, setSaving] = useState(false)
-  const [draftId, setDraftId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState("")
 
   useEffect(() => {
-    fetchAll()
-  }, [userId])
+    fetchMailData()
+  }, [draftId])
 
-  const fetchAll = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user?.email) return
-    const t = EMAIL_TO_TEACHER[user.email]
-    if (!t) return
-    setTeacher(t)
+  const fetchMailData = async () => {
+    if (!draftId) return
+
+    const { data: mailData } = await supabase
+      .from("follow_mails")
+      .select("subject, content, user_id")
+      .eq("id", draftId)
+      .single()
+
+    if (!mailData) return
+
+    setSubject(mailData.subject ?? "")
+    setContent(mailData.content ?? "")
 
     const { data: userData } = await supabase
       .from("users")
       .select("handle_name")
-      .eq("id", userId)
+      .eq("id", mailData.user_id)
       .single()
+
     setHandleName(userData?.handle_name ?? "-")
-
-    const { data: templateData } = await supabase
-      .from("mail_templates")
-      .select("id, title, body")
-      .eq("teacher_id", t.id)
-      .order("created_at", { ascending: false })
-    setTemplates(templateData ?? [])
-
-    const { data: draftData } = await supabase
-      .from("follow_mails")
-      .select("id, content")
-      .eq("user_id", userId)
-      .eq("teacher_id", t.id)
-      .eq("is_draft", true)
-      .order("created_at", { ascending: false })
-      .limit(1)
-    if (draftData?.[0]) {
-      setDraftId(draftData[0].id)
-      setContent(draftData[0].content ?? "")
-    }
-
     setLoading(false)
   }
 
-  const handleTemplateChange = (templateId: string) => {
-    setSelectedTemplateId(templateId)
-    const t = templates.find(t => t.id === templateId)
-    if (t) setContent(t.body)
-  }
+  const handleSend = async () => {
+    if (!draftId) return
+    setSending(true)
+    setError("")
 
-  const saveDraft = async () => {
-    if (!teacher) return
-    setSaving(true)
-    const subject = `【龍月花】${teacher.name}先生からフォローメールが届いております`
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-follow-mail`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session?.access_token}`,
+          },
+          body: JSON.stringify({ follow_mail_id: draftId }),
+        }
+      )
 
-    if (draftId) {
-      await supabase.from("follow_mails").update({
-        content,
-        subject,
-        updated_at: new Date().toISOString(),
-      }).eq("id", draftId)
-    } else {
-      const { data } = await supabase.from("follow_mails").insert({
-        user_id: userId,
-        teacher_id: teacher.id,
-        subject,
-        content,
-        is_draft: true,
-        data_source: "minden",
-      }).select("id").single()
-      if (data) setDraftId(data.id)
+      const result = await res.json()
+      if (!res.ok || result.error) {
+        setError(result.error ?? "送信に失敗しました")
+        setSending(false)
+        return
+      }
+
+      // 送信成功 → ユーザー詳細へ
+      router.push(`/admin/users/${userId}`)
+    } catch (e: any) {
+      setError(e.message ?? "送信に失敗しました")
+      setSending(false)
     }
-    setSaving(false)
   }
-
-  const goToConfirm = async () => {
-    await saveDraft()
-    router.push(`/admin/follow-mails/confirm/${userId}`)
-  }
-
-  const subject = teacher ? `【龍月花】${teacher.name}先生からフォローメールが届いております` : ""
 
   if (loading) return <div className="p-6">読み込み中...</div>
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
-      <h1 className="text-xl font-bold mb-4">フォローメール作成</h1>
+      <h1 className="text-xl font-bold mb-4">フォローメール確認</h1>
 
       <div className="border rounded-lg p-4 bg-white space-y-4">
         <div className="text-sm text-gray-600">
           送信先：<span className="font-medium text-gray-900">{handleName}</span>
-        </div>
-
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <label className="text-xs text-gray-500">テンプレート</label>
-            <a
-              href="/admin/mail-templates"
-              target="_blank"
-              className="text-xs text-teal-600 hover:underline"
-            >
-              テンプレート管理 →
-            </a>
-          </div>
-          <select
-            className="w-full border rounded px-2 py-1 text-sm bg-white"
-            value={selectedTemplateId}
-            onChange={e => handleTemplateChange(e.target.value)}
-          >
-            <option value="">-</option>
-            {templates.map(t => (
-              <option key={t.id} value={t.id}>{t.title}</option>
-            ))}
-          </select>
         </div>
 
         <div>
@@ -150,35 +99,34 @@ export default function FollowMailNewPage() {
 
         <div>
           <label className="text-xs text-gray-500">本文</label>
-          <textarea
-            className="w-full border rounded px-2 py-1 mt-1 text-sm"
-            style={{ height: "400px" }}
-            value={content}
-            onChange={e => setContent(e.target.value)}
-            placeholder="本文を入力してください"
-          />
+          <div
+            className="w-full border rounded px-2 py-2 mt-1 text-sm bg-gray-50 text-gray-700 whitespace-pre-wrap"
+            style={{ minHeight: "400px" }}
+          >
+            {content}
+          </div>
         </div>
 
-        <div className="flex justify-between">
-          <a href={`/admin/users/${userId}`} className="text-sm text-gray-500 hover:underline">
-            ← 戻る
-          </a>
-          <div className="flex gap-2">
-            <button
-              onClick={saveDraft}
-              disabled={saving}
-              className="text-sm bg-gray-400 hover:bg-gray-500 text-white px-4 py-1.5 rounded"
-            >
-              {saving ? "保存中..." : "下書き保存"}
-            </button>
-            <button
-              onClick={goToConfirm}
-              disabled={saving || !content}
-              className="text-sm bg-teal-500 hover:bg-teal-600 text-white px-4 py-1.5 rounded disabled:opacity-50"
-            >
-              確認へ
-            </button>
+        {error && (
+          <div className="text-sm text-red-500 bg-red-50 border border-red-200 rounded px-3 py-2">
+            {error}
           </div>
+        )}
+
+        <div className="flex justify-between">
+          <button
+            onClick={() => router.back()}
+            className="text-sm text-gray-500 hover:underline"
+          >
+            ← 戻る
+          </button>
+          <button
+            onClick={handleSend}
+            disabled={sending}
+            className="text-sm bg-teal-500 hover:bg-teal-600 text-white px-6 py-1.5 rounded disabled:opacity-50"
+          >
+            {sending ? "送信中..." : "送信する"}
+          </button>
         </div>
       </div>
     </div>
