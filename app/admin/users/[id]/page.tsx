@@ -398,6 +398,7 @@ export default function UserDetailPage() {
   if (loading) return <div className="p-6">読み込み中...</div>
 
   return (
+    <>
     <div className="p-6 flex gap-6">
       <div className="w-64 shrink-0">
         <div className="border rounded-lg p-4 bg-white">
@@ -682,5 +683,6 @@ export default function UserDetailPage() {
         onClose={() => setSelectedConsultation(null)}
       />
     )}
+    </>
   )
 }
