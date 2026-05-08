@@ -114,6 +114,7 @@ type Consultation = {
   call_duration: number
   price: number
   recording_url: string | null
+  signed_url: string | null
 }
 
 type Memo = {
@@ -194,14 +195,26 @@ export default function UserDetailPage() {
       .select(`id, started_at, ended_at, teacher_id, call_duration, price, call_recordings(recording_url)`)
       .eq("user_id", id)
       .order("started_at", { ascending: false })
-    const consultationList = (cons ?? []).map((c: any) => ({
+    const consultationListRaw = (cons ?? []).map((c: any) => ({
       ...c,
       recording_url: c.call_recordings?.[0]?.recording_url ?? null,
+      signed_url: null as string | null,
       // price が入っていれば使う、なければ call_duration × price_per_min で計算
       price: (c.price != null && c.price > 0)
         ? c.price
         : (c.call_duration ?? 0) * (priceMap[c.teacher_id] ?? 0),
     }))
+
+    // recording_urlがある行だけ署名付きURL発行（60分有効）
+    const consultationList = await Promise.all(
+      consultationListRaw.map(async (c) => {
+        if (!c.recording_url) return c
+        const { data } = await supabase.storage
+          .from("recordings")
+          .createSignedUrl(c.recording_url, 60 * 60)
+        return { ...c, signed_url: data?.signedUrl ?? null }
+      })
+    )
     setConsultations(consultationList)
 
     // 担当先生かどうか判定
@@ -499,9 +512,11 @@ export default function UserDetailPage() {
                     <td className="px-3 py-2 text-center">{c.call_duration}分</td>
                     <td className="px-3 py-2 text-center">{(c.price ?? 0).toLocaleString()}pt</td>
                     <td className="px-3 py-2 text-center">
-                      {c.recording_url
-                        ? <a href={c.recording_url} target="_blank" className="text-blue-600 hover:underline text-xs">再生</a>
-                        : <span className="text-gray-400 text-xs">-</span>}
+                      {c.signed_url
+                        ? <a href={c.signed_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-xs">再生</a>
+                        : c.recording_url
+                          ? <span className="text-gray-400 text-xs">読込中</span>
+                          : <span className="text-gray-400 text-xs">-</span>}
                     </td>
                     <td className="px-3 py-2 text-center">
                       <button className="text-xs bg-amber-500 hover:bg-amber-600 text-white px-2 py-0.5 rounded">入</button>
