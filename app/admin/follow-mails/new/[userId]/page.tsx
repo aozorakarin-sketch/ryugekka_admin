@@ -75,17 +75,19 @@ export default function FollowMailNewPage() {
     if (t) setContent(t.body)
   }
 
-  const saveDraft = async () => {
-    if (!teacher) return
+  const saveDraft = async (): Promise<string | null> => {
+    if (!teacher) return null
     setSaving(true)
     const subject = `【龍月花】${teacher.name}先生からフォローメールが届いております`
 
-    if (draftId) {
+    let currentDraftId = draftId
+
+    if (currentDraftId) {
       await supabase.from("follow_mails").update({
         content,
         subject,
         updated_at: new Date().toISOString(),
-      }).eq("id", draftId)
+      }).eq("id", currentDraftId)
     } else {
       const { data } = await supabase.from("follow_mails").insert({
         user_id: userId,
@@ -95,14 +97,19 @@ export default function FollowMailNewPage() {
         is_draft: true,
         data_source: "minden",
       }).select("id").single()
-      if (data) setDraftId(data.id)
+      if (data) {
+        setDraftId(data.id)
+        currentDraftId = data.id
+      }
     }
     setSaving(false)
+    return currentDraftId
   }
 
   const goToConfirm = async () => {
-    await saveDraft()
-    router.push(`/admin/follow-mails/confirm/${userId}`)
+    const currentDraftId = await saveDraft()
+    if (!currentDraftId) return
+    router.push(`/admin/follow-mails/confirm/${userId}?draftId=${currentDraftId}`)
   }
 
   const subject = teacher ? `【龍月花】${teacher.name}先生からフォローメールが届いております` : ""
