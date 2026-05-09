@@ -12,6 +12,7 @@ type Consultation = {
   price: number
   recording_url: string | null
   signed_url: string | null
+  data_source?: string | null
 }
 
 type Props = {
@@ -36,25 +37,43 @@ export default function ConsultationModal({ consultation, userName, teacherName,
   const [afterError, setAfterError] = useState<string | null>(null)
   const [afterDone, setAfterDone] = useState(false)
 
-  // 既存の文字起こしを取得
+  const isChat = consultation.data_source === "chat"
+
   useEffect(() => {
-    const fetchTranscript = async () => {
-      const { data } = await supabase
-        .from("call_recordings")
-        .select("transcript")
-        .eq("consultation_id", consultation.id)
-        .maybeSingle()
-      if (data?.transcript) setTranscript(data.transcript)
+    if (isChat) {
+      // チャットの場合はchat_messagesから履歴を取得
+      fetchChatHistory()
+    } else {
+      // 電話の場合は既存の文字起こしを取得
+      fetchTranscript()
     }
-    fetchTranscript()
   }, [consultation.id])
+
+  const fetchTranscript = async () => {
+    const { data } = await supabase
+      .from("call_recordings")
+      .select("transcript")
+      .eq("consultation_id", consultation.id)
+      .maybeSingle()
+    if (data?.transcript) setTranscript(data.transcript)
+  }
+
+  const fetchChatHistory = async () => {
+    // consultationsのuser_questionにチャット履歴が入っている
+    const { data } = await supabase
+      .from("consultations")
+      .select("user_question")
+      .eq("id", consultation.id)
+      .single()
+    if (data?.user_question) setTranscript(data.user_question)
+  }
 
   const formatDate = (s: string) => {
     const d = new Date(s)
     return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`
   }
 
-  // 自動文字起こし
+  // 自動文字起こし（電話のみ）
   const handleAutoTranscribe = async () => {
     setTranscribing(true)
     setTranscriptError(null)
@@ -81,20 +100,29 @@ export default function ConsultationModal({ consultation, userName, teacherName,
     }
   }
 
-  // テキストをアップロード（貼り付け後に保存）
+  // テキストを保存
   const handleSaveTranscript = async () => {
     setUploadingText(true)
     try {
-      const { data: rec } = await supabase
-        .from("call_recordings")
-        .select("id")
-        .eq("consultation_id", consultation.id)
-        .maybeSingle()
-      if (rec) {
+      if (isChat) {
+        // チャットの場合はconsultationsのuser_questionを更新
         await supabase
+          .from("consultations")
+          .update({ user_question: transcript, updated_at: new Date().toISOString() })
+          .eq("id", consultation.id)
+      } else {
+        // 電話の場合はcall_recordingsのtranscriptを更新
+        const { data: rec } = await supabase
           .from("call_recordings")
-          .update({ transcript, updated_at: new Date().toISOString() })
-          .eq("id", rec.id)
+          .select("id")
+          .eq("consultation_id", consultation.id)
+          .maybeSingle()
+        if (rec) {
+          await supabase
+            .from("call_recordings")
+            .update({ transcript, updated_at: new Date().toISOString() })
+            .eq("id", rec.id)
+        }
       }
     } finally {
       setUploadingText(false)
@@ -168,7 +196,8 @@ export default function ConsultationModal({ consultation, userName, teacherName,
   // テキストをダウンロード
   const handleDownloadTranscript = () => {
     const d = new Date(consultation.started_at)
-    const fileName = `${userName}_${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}_transcript.txt`
+    const suffix = isChat ? "chat" : "transcript"
+    const fileName = `${userName}_${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}_${suffix}.txt`
     const blob = new Blob([transcript], { type: "text/plain;charset=utf-8" })
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
@@ -193,6 +222,7 @@ export default function ConsultationModal({ consultation, userName, teacherName,
             <div className="font-bold text-gray-800">{userName}</div>
             <div className="text-xs text-gray-500">
               {formatDate(consultation.started_at)} / {teacherName} / {consultation.call_duration}分
+              {isChat && <span className="ml-2 bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full text-xs">チャット</span>}
             </div>
           </div>
           <button
@@ -203,8 +233,8 @@ export default function ConsultationModal({ consultation, userName, teacherName,
 
         <div className="p-4 space-y-4">
 
-          {/* 音声プレイヤー */}
-          {consultation.signed_url && (
+          {/* 音声プレイヤー（電話のみ） */}
+          {!isChat && consultation.signed_url && (
             <div className="bg-gray-50 rounded-lg p-3 border">
               <div className="text-xs font-medium text-gray-500 mb-2">🎵 音声</div>
               <audio
@@ -215,26 +245,30 @@ export default function ConsultationModal({ consultation, userName, teacherName,
             </div>
           )}
 
-          {/* 文字起こし */}
+          {/* 文字起こし / チャット履歴 */}
           <div className="border rounded-lg p-3">
             <div className="flex items-center justify-between mb-2">
-              <div className="text-xs font-medium text-gray-500">📝 文字起こし</div>
+              <div className="text-xs font-medium text-gray-500">
+                {isChat ? "💬 チャット履歴" : "📝 文字起こし"}
+              </div>
               <div className="flex gap-2">
-                {/* 自動文字起こし */}
-                <button
-                  onClick={handleAutoTranscribe}
-                  disabled={!hasApiKey || transcribing}
-                  className={`text-xs px-3 py-1 rounded font-medium transition-colors ${
-                    hasApiKey
-                      ? "bg-teal-500 hover:bg-teal-600 text-white"
-                      : "bg-gray-200 text-gray-400 cursor-not-allowed"
-                  }`}
-                  title={!hasApiKey ? "OpenAI APIキーが設定されていません" : ""}
-                >
-                  {transcribing ? "⌛ 処理中..." : "🤖 自動文字起こし"}
-                </button>
+                {/* 自動文字起こし（電話のみ） */}
+                {!isChat && (
+                  <button
+                    onClick={handleAutoTranscribe}
+                    disabled={!hasApiKey || transcribing}
+                    className={`text-xs px-3 py-1 rounded font-medium transition-colors ${
+                      hasApiKey
+                        ? "bg-teal-500 hover:bg-teal-600 text-white"
+                        : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                    }`}
+                    title={!hasApiKey ? "OpenAI APIキーが設定されていません" : ""}
+                  >
+                    {transcribing ? "⌛ 処理中..." : "🤖 自動文字起こし"}
+                  </button>
+                )}
 
-                {/* テキストをダウンロード */}
+                {/* DLボタン */}
                 {hasTranscript && (
                   <button
                     onClick={handleDownloadTranscript}
@@ -250,7 +284,7 @@ export default function ConsultationModal({ consultation, userName, teacherName,
 
             <textarea
               className="w-full border rounded p-2 text-sm resize-y min-h-32 focus:outline-none focus:border-teal-400"
-              placeholder="ここにテキストを貼り付けるか、自動文字起こしを実行してください"
+              placeholder={isChat ? "チャット履歴が表示されます" : "ここにテキストを貼り付けるか、自動文字起こしを実行してください"}
               value={transcript}
               onChange={e => setTranscript(e.target.value)}
             />
