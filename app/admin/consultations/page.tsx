@@ -17,6 +17,7 @@ type Consultation = {
   call_duration: number
   price: number
   recording_url: string | null
+  data_source: string | null
 }
 
 const TEACHERS = [
@@ -31,6 +32,22 @@ const TEACHER_MAP: Record<string, string> = {
   "3ba85bb9-9065-461b-b76b-cc488d4c0c3b": "雲龍蓮",
   "17cf0ca1-7526-466e-a644-9d3efefa4091": "椎名架月",
   "cd2c4101-2e24-4ae2-8d6a-507a943904af": "青空花林",
+}
+
+function SourceBadge({ dataSource }: { dataSource: string | null }) {
+  if (dataSource === "mail") {
+    return <span className="bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full text-xs font-medium">メール</span>
+  }
+  if (dataSource === "ryugekka") {
+    return <span className="bg-green-100 text-green-800 px-2 py-0.5 rounded-full text-xs font-medium">電話</span>
+  }
+  if (dataSource === "chat") {
+    return <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-xs font-medium">チャット</span>
+  }
+  if (dataSource === "minden") {
+    return <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs font-medium">みんでん</span>
+  }
+  return <span className="text-gray-400 text-xs">-</span>
 }
 
 export default function ConsultationsPage() {
@@ -60,6 +77,7 @@ export default function ConsultationsPage() {
           user_id,
           call_duration,
           price,
+          data_source,
           call_recordings(recording_url)
         `)
         .order("started_at", { ascending: false })
@@ -89,6 +107,7 @@ export default function ConsultationsPage() {
       call_duration: c.call_duration ?? 0,
       price: c.price ?? 0,
       recording_url: c.call_recordings?.[0]?.recording_url ?? null,
+      data_source: c.data_source ?? null,
     }))
 
     setConsultations(formatted)
@@ -145,6 +164,7 @@ export default function ConsultationsPage() {
               <th className="text-left px-3 py-3 font-medium whitespace-nowrap">終了日時</th>
               <th className="text-left px-3 py-3 font-medium whitespace-nowrap">名前</th>
               <th className="text-left px-3 py-3 font-medium whitespace-nowrap">先生</th>
+              <th className="text-center px-3 py-3 font-medium whitespace-nowrap">種別</th>
               <th className="text-center px-3 py-3 font-medium whitespace-nowrap">鑑定回数</th>
               <th className="text-center px-3 py-3 font-medium whitespace-nowrap">メール回数</th>
               <th className="text-center px-3 py-3 font-medium whitespace-nowrap">鑑定分数</th>
@@ -164,6 +184,9 @@ export default function ConsultationsPage() {
                   {c.user_id ? <a href={`/admin/users/${c.user_id}`} className="text-blue-600 hover:underline">{c.user_name}</a> : <span>{c.user_name}</span>}
                 </td>
                 <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-600">{c.teacher_name}</td>
+                <td className="px-3 py-2 text-center">
+                  <SourceBadge dataSource={c.data_source} />
+                </td>
                 <td className="px-3 py-2 text-center">
                   <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-xs font-medium">
                     {c.consultation_count}回
