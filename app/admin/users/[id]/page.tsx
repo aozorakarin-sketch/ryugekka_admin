@@ -116,6 +116,7 @@ type Consultation = {
   price: number
   recording_url: string | null
   signed_url: string | null
+  data_source: string | null
 }
 
 type Memo = {
@@ -134,6 +135,22 @@ type Memo = {
 type UserProfile = {
   birth_date: string
   gender: string
+}
+
+function SourceBadge({ dataSource }: { dataSource: string | null }) {
+  if (dataSource === "mail") {
+    return <span className="bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full text-xs font-medium">メール</span>
+  }
+  if (dataSource === "ryugekka") {
+    return <span className="bg-green-100 text-green-800 px-2 py-0.5 rounded-full text-xs font-medium">電話</span>
+  }
+  if (dataSource === "chat") {
+    return <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-xs font-medium">チャット</span>
+  }
+  if (dataSource === "minden") {
+    return <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs font-medium">みんでん</span>
+  }
+  return <span className="text-gray-400 text-xs">-</span>
 }
 
 export default function UserDetailPage() {
@@ -200,17 +217,17 @@ export default function UserDetailPage() {
     // 鑑定履歴（全先生分）
     const { data: cons } = await supabase
       .from("consultations")
-      .select(`id, started_at, ended_at, teacher_id, call_duration, price, call_recordings(recording_url)`)
+      .select(`id, started_at, ended_at, teacher_id, call_duration, price, data_source, call_recordings(recording_url)`)
       .eq("user_id", id)
       .order("started_at", { ascending: false })
     const consultationListRaw = (cons ?? []).map((c: any) => ({
       ...c,
       recording_url: c.call_recordings?.[0]?.recording_url ?? null,
       signed_url: null as string | null,
-      // price が入っていれば使う、なければ call_duration × price_per_min で計算
       price: (c.price != null && c.price > 0)
         ? c.price
         : (c.call_duration ?? 0) * (priceMap[c.teacher_id] ?? 0),
+      data_source: c.data_source ?? null,
     }))
 
     // recording_urlがある行だけ署名付きURL発行（60分有効）
@@ -525,8 +542,8 @@ export default function UserDetailPage() {
               <thead className="bg-gray-50 border-b">
                 <tr>
                   <th className="text-left px-3 py-2 font-medium whitespace-nowrap">開始日時</th>
-                  <th className="text-left px-3 py-2 font-medium whitespace-nowrap">終了日時</th>
                   <th className="text-left px-3 py-2 font-medium whitespace-nowrap">先生</th>
+                  <th className="text-center px-3 py-2 font-medium whitespace-nowrap">種別</th>
                   <th className="text-center px-3 py-2 font-medium whitespace-nowrap">分数</th>
                   <th className="text-center px-3 py-2 font-medium whitespace-nowrap">消費pt</th>
                   <th className="text-center px-3 py-2 font-medium whitespace-nowrap">音声</th>
@@ -537,8 +554,10 @@ export default function UserDetailPage() {
                 {consultations.map((c, i) => (
                   <tr key={c.id} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                     <td className="px-3 py-2 whitespace-nowrap text-xs">{formatDate(c.started_at)}</td>
-                    <td className="px-3 py-2 whitespace-nowrap text-xs">{formatDate(c.ended_at)}</td>
                     <td className="px-3 py-2 text-xs">{TEACHER_MAP[c.teacher_id] ?? "-"}</td>
+                    <td className="px-3 py-2 text-center">
+                      <SourceBadge dataSource={c.data_source} />
+                    </td>
                     <td className="px-3 py-2 text-center">{c.call_duration}分</td>
                     <td className="px-3 py-2 text-center">{(c.price ?? 0).toLocaleString()}pt</td>
                     <td className="px-3 py-2 text-center">
