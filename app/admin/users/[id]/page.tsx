@@ -171,7 +171,6 @@ export default function UserDetailPage() {
   const [savingProfile, setSavingProfile] = useState(false)
 
   const [myTeacherId, setMyTeacherId] = useState<string | null>(null)
-  const [isAssigned, setIsAssigned] = useState(false)
   const [userPoints, setUserPoints] = useState<{ teacher_id: string; points: number }[]>([])
   const [hasApiKey, setHasApiKey] = useState(false)
   const [hasGeminiKey, setHasGeminiKey] = useState(false)
@@ -214,12 +213,17 @@ export default function UserDetailPage() {
     const priceMap: Record<string, number> = {}
     teachersData?.forEach(t => { priceMap[t.id] = t.price_per_min ?? 0 })
 
-    // 鑑定履歴（全先生分）
-    const { data: cons } = await supabase
+    // 鑑定履歴（ログイン先生分のみ）
+    const consQuery = supabase
       .from("consultations")
       .select(`id, started_at, ended_at, teacher_id, call_duration, price, data_source, call_recordings(recording_url)`)
       .eq("user_id", id)
       .order("started_at", { ascending: false })
+
+    const { data: cons } = teacherId
+      ? await consQuery.eq("teacher_id", teacherId)
+      : await consQuery.eq("teacher_id", "")
+
     const consultationListRaw = (cons ?? []).map((c: any) => ({
       ...c,
       recording_url: c.call_recordings?.[0]?.recording_url ?? null,
@@ -242,13 +246,7 @@ export default function UserDetailPage() {
     )
     setConsultations(consultationList)
 
-    // 担当先生かどうか判定
-    if (teacherId) {
-      const assigned = consultationList.some(c => c.teacher_id === teacherId)
-      setIsAssigned(assigned)
-    }
-
-    // 自分のteacher_memosを取得
+    // teacher_memosを取得（ログイン先生分のみ）
     if (teacherId) {
       const { data: memoDataList } = await supabase
         .from("teacher_memos")
@@ -287,22 +285,24 @@ export default function UserDetailPage() {
       })
     }
 
-    // フォローメール
+    // フォローメール（ログイン先生分のみ）
     const { count: fCount, data: fData } = await supabase
       .from("follow_mails")
       .select("sent_at", { count: "exact" })
       .eq("user_id", id)
+      .eq("teacher_id", teacherId ?? "")
       .eq("is_draft", false)
       .order("sent_at", { ascending: false })
       .limit(1)
     setFollowMailCount(fCount ?? 0)
     setFollowMailLastAt(fData?.[0]?.sent_at ?? null)
 
-    // レビュー
+    // レビュー（ログイン先生分のみ）
     const { count: rCount, data: rData } = await supabase
       .from("reviews")
       .select("created_at", { count: "exact" })
       .eq("user_id", id)
+      .eq("teacher_id", teacherId ?? "")
       .order("created_at", { ascending: false })
       .limit(1)
     setReviewCount(rCount ?? 0)
@@ -319,7 +319,7 @@ export default function UserDetailPage() {
   }
 
   const saveMemo = async () => {
-    if (!isAssigned || !myTeacherId) return
+    if (!myTeacherId) return
     setSaving(true)
     if (memo.id) {
       await supabase.from("teacher_memos").update({
@@ -355,7 +355,7 @@ export default function UserDetailPage() {
   }
 
   const saveProfile = async () => {
-    if (!isAssigned) return
+    if (!myTeacherId) return
     setSavingProfile(true)
     const { data: existing } = await supabase
       .from("user_profiles")
@@ -416,6 +416,9 @@ export default function UserDetailPage() {
   const selectClass = (disabled: boolean) =>
     `w-full border rounded px-2 py-1 mt-1 text-sm ${disabled ? "bg-gray-100 text-gray-400 cursor-not-allowed" : "bg-white"}`
 
+  // ログイン先生がいればメモ・プロフィール編集可能（新規ユーザーも含む）
+  const canEdit = !!myTeacherId
+
   if (loading) return <div className="p-6">読み込み中...</div>
 
   return (
@@ -425,12 +428,6 @@ export default function UserDetailPage() {
         <div className="border rounded-lg p-4 bg-white">
           <h2 className="font-bold text-lg mb-1">{handleName}</h2>
           <a href="/admin/users" className="text-xs text-gray-400 hover:underline">← 一覧に戻る</a>
-
-          {!isAssigned && (
-            <div className="mt-2 text-xs text-amber-600 bg-amber-50 rounded p-2">
-              閲覧のみ（担当外）
-            </div>
-          )}
 
           <div className="mt-4 space-y-3 text-sm">
             <div className="bg-pink-50 rounded p-3">
@@ -465,9 +462,9 @@ export default function UserDetailPage() {
                 <div className="font-medium text-purple-800">プロフィール</div>
                 <button
                   onClick={saveProfile}
-                  disabled={savingProfile || !isAssigned}
+                  disabled={savingProfile || !canEdit}
                   className={`text-xs px-2 py-0.5 rounded text-white ${
-                    isAssigned ? "bg-purple-500 hover:bg-purple-600" : "bg-gray-300 cursor-not-allowed"
+                    canEdit ? "bg-purple-500 hover:bg-purple-600" : "bg-gray-300 cursor-not-allowed"
                   }`}
                 >
                   {savingProfile ? "保存中..." : "保存"}
@@ -478,19 +475,19 @@ export default function UserDetailPage() {
                   <label className="text-xs text-gray-500">誕生日</label>
                   <input
                     type="date"
-                    className={`w-full border rounded px-2 py-1 mt-1 text-xs ${isAssigned ? "bg-white" : "bg-gray-100 text-gray-400 cursor-not-allowed"}`}
+                    className={`w-full border rounded px-2 py-1 mt-1 text-xs ${canEdit ? "bg-white" : "bg-gray-100 text-gray-400 cursor-not-allowed"}`}
                     value={profile.birth_date}
-                    onChange={e => isAssigned && setProfile({...profile, birth_date: e.target.value})}
-                    disabled={!isAssigned}
+                    onChange={e => canEdit && setProfile({...profile, birth_date: e.target.value})}
+                    disabled={!canEdit}
                   />
                 </div>
                 <div>
                   <label className="text-xs text-gray-500">性別</label>
                   <select
-                    className={`w-full border rounded px-2 py-1 mt-1 text-xs ${isAssigned ? "bg-white" : "bg-gray-100 text-gray-400 cursor-not-allowed"}`}
+                    className={`w-full border rounded px-2 py-1 mt-1 text-xs ${canEdit ? "bg-white" : "bg-gray-100 text-gray-400 cursor-not-allowed"}`}
                     value={profile.gender}
-                    onChange={e => isAssigned && setProfile({...profile, gender: e.target.value})}
-                    disabled={!isAssigned}
+                    onChange={e => canEdit && setProfile({...profile, gender: e.target.value})}
+                    disabled={!canEdit}
                   >
                     <option value="">-</option>
                     <option value="女性">女性</option>
@@ -507,7 +504,7 @@ export default function UserDetailPage() {
                 <div className="font-medium text-yellow-800">フォローメール</div>
                 <div className="flex gap-1">
                   <a href={`/admin/follow-mails/user/${id}`} className="text-xs bg-yellow-400 hover:bg-yellow-500 text-white px-2 py-0.5 rounded">一覧</a>
-                  {isAssigned ? (
+                  {canEdit ? (
                     <a href={`/admin/follow-mails/new/${id}`} className="text-xs bg-yellow-500 hover:bg-yellow-600 text-white px-2 py-0.5 rounded">作成</a>
                   ) : (
                     <span className="text-xs bg-gray-300 text-white px-2 py-0.5 rounded cursor-not-allowed">作成</span>
@@ -551,28 +548,36 @@ export default function UserDetailPage() {
                 </tr>
               </thead>
               <tbody>
-                {consultations.map((c, i) => (
-                  <tr key={c.id} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-                    <td className="px-3 py-2 whitespace-nowrap text-xs">{formatDate(c.started_at)}</td>
-                    <td className="px-3 py-2 text-xs">{TEACHER_MAP[c.teacher_id] ?? "-"}</td>
-                    <td className="px-3 py-2 text-center">
-                      <SourceBadge dataSource={c.data_source} />
-                    </td>
-                    <td className="px-3 py-2 text-center">{c.call_duration}分</td>
-                    <td className="px-3 py-2 text-center">{(c.price ?? 0).toLocaleString()}pt</td>
-                    <td className="px-3 py-2 text-center">
-                      {c.signed_url
-                        ? <span className="text-xs text-teal-600 font-medium">🎵 あり</span>
-                        : <span className="text-gray-400 text-xs">-</span>}
-                    </td>
-                    <td className="px-3 py-2 text-center">
-                      <button
-                        onClick={() => setSelectedConsultation(c)}
-                        className="text-xs bg-amber-500 hover:bg-amber-600 text-white px-2 py-0.5 rounded"
-                      >入</button>
+                {consultations.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-3 py-8 text-center text-gray-400 text-sm">
+                      鑑定履歴がありません
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  consultations.map((c, i) => (
+                    <tr key={c.id} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                      <td className="px-3 py-2 whitespace-nowrap text-xs">{formatDate(c.started_at)}</td>
+                      <td className="px-3 py-2 text-xs">{TEACHER_MAP[c.teacher_id] ?? "-"}</td>
+                      <td className="px-3 py-2 text-center">
+                        <SourceBadge dataSource={c.data_source} />
+                      </td>
+                      <td className="px-3 py-2 text-center">{c.call_duration}分</td>
+                      <td className="px-3 py-2 text-center">{(c.price ?? 0).toLocaleString()}pt</td>
+                      <td className="px-3 py-2 text-center">
+                        {c.signed_url
+                          ? <span className="text-xs text-teal-600 font-medium">🎵 あり</span>
+                          : <span className="text-gray-400 text-xs">-</span>}
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        <button
+                          onClick={() => setSelectedConsultation(c)}
+                          className="text-xs bg-amber-500 hover:bg-amber-600 text-white px-2 py-0.5 rounded"
+                        >入</button>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -583,9 +588,9 @@ export default function UserDetailPage() {
             <h3 className="font-bold">ユーザーメモ</h3>
             <button
               onClick={saveMemo}
-              disabled={saving || !isAssigned}
+              disabled={saving || !canEdit}
               className={`text-sm px-4 py-1.5 rounded text-white ${
-                isAssigned ? "bg-teal-500 hover:bg-teal-600" : "bg-gray-300 cursor-not-allowed"
+                canEdit ? "bg-teal-500 hover:bg-teal-600" : "bg-gray-300 cursor-not-allowed"
               }`}
             >
               {saving ? "保存中..." : "更新"}
@@ -596,10 +601,10 @@ export default function UserDetailPage() {
             <div>
               <label className="text-xs text-gray-500">相談ジャンル</label>
               <select
-                className={selectClass(!isAssigned)}
+                className={selectClass(!canEdit)}
                 value={memo.category}
-                onChange={e => isAssigned && setMemo({...memo, category: e.target.value, category_child: ""})}
-                disabled={!isAssigned}
+                onChange={e => canEdit && setMemo({...memo, category: e.target.value, category_child: ""})}
+                disabled={!canEdit}
               >
                 {CATEGORY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
@@ -607,10 +612,10 @@ export default function UserDetailPage() {
             <div>
               <label className="text-xs text-gray-500">詳細ジャンル</label>
               <select
-                className={selectClass(!isAssigned)}
+                className={selectClass(!canEdit)}
                 value={memo.category_child}
-                onChange={e => isAssigned && setMemo({...memo, category_child: e.target.value})}
-                disabled={!isAssigned}
+                onChange={e => canEdit && setMemo({...memo, category_child: e.target.value})}
+                disabled={!canEdit}
               >
                 <option value="">-</option>
                 {(CATEGORY_CHILD_OPTIONS[memo.category] ?? []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -619,10 +624,10 @@ export default function UserDetailPage() {
             <div>
               <label className="text-xs text-gray-500">悩みの状況</label>
               <select
-                className={selectClass(!isAssigned)}
+                className={selectClass(!canEdit)}
                 value={memo.worry_status}
-                onChange={e => isAssigned && setMemo({...memo, worry_status: e.target.value})}
-                disabled={!isAssigned}
+                onChange={e => canEdit && setMemo({...memo, worry_status: e.target.value})}
+                disabled={!canEdit}
               >
                 {WORRY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
@@ -630,10 +635,10 @@ export default function UserDetailPage() {
             <div>
               <label className="text-xs text-gray-500">婚姻状況</label>
               <select
-                className={selectClass(!isAssigned)}
+                className={selectClass(!canEdit)}
                 value={memo.marriage}
-                onChange={e => isAssigned && setMemo({...memo, marriage: e.target.value})}
-                disabled={!isAssigned}
+                onChange={e => canEdit && setMemo({...memo, marriage: e.target.value})}
+                disabled={!canEdit}
               >
                 {MARRIAGE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
@@ -641,10 +646,10 @@ export default function UserDetailPage() {
             <div>
               <label className="text-xs text-gray-500">お子様</label>
               <select
-                className={selectClass(!isAssigned)}
+                className={selectClass(!canEdit)}
                 value={memo.child}
-                onChange={e => isAssigned && setMemo({...memo, child: e.target.value})}
-                disabled={!isAssigned}
+                onChange={e => canEdit && setMemo({...memo, child: e.target.value})}
+                disabled={!canEdit}
               >
                 {CHILD_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
@@ -652,10 +657,10 @@ export default function UserDetailPage() {
             <div>
               <label className="text-xs text-gray-500">職業</label>
               <select
-                className={selectClass(!isAssigned)}
+                className={selectClass(!canEdit)}
                 value={memo.work}
-                onChange={e => isAssigned && setMemo({...memo, work: e.target.value})}
-                disabled={!isAssigned}
+                onChange={e => canEdit && setMemo({...memo, work: e.target.value})}
+                disabled={!canEdit}
               >
                 {WORK_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
@@ -663,10 +668,10 @@ export default function UserDetailPage() {
             <div>
               <label className="text-xs text-gray-500">年収</label>
               <select
-                className={selectClass(!isAssigned)}
+                className={selectClass(!canEdit)}
                 value={memo.salary}
-                onChange={e => isAssigned && setMemo({...memo, salary: e.target.value})}
-                disabled={!isAssigned}
+                onChange={e => canEdit && setMemo({...memo, salary: e.target.value})}
+                disabled={!canEdit}
               >
                 {SALARY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
@@ -676,21 +681,21 @@ export default function UserDetailPage() {
           <div className="mb-3">
             <label className="text-xs text-gray-500">お相手の情報</label>
             <input
-              className={`w-full border rounded px-2 py-1 mt-1 text-sm ${isAssigned ? "bg-white" : "bg-gray-100 text-gray-400 cursor-not-allowed"}`}
+              className={`w-full border rounded px-2 py-1 mt-1 text-sm ${canEdit ? "bg-white" : "bg-gray-100 text-gray-400 cursor-not-allowed"}`}
               value={memo.partner}
-              onChange={e => isAssigned && setMemo({...memo, partner: e.target.value})}
-              disabled={!isAssigned}
+              onChange={e => canEdit && setMemo({...memo, partner: e.target.value})}
+              disabled={!canEdit}
             />
           </div>
 
           <div>
             <label className="text-xs text-gray-500">メモ</label>
             <textarea
-              className={`w-full border rounded px-2 py-1 mt-1 text-sm ${isAssigned ? "bg-white" : "bg-gray-100 text-gray-400 cursor-not-allowed"}`}
+              className={`w-full border rounded px-2 py-1 mt-1 text-sm ${canEdit ? "bg-white" : "bg-gray-100 text-gray-400 cursor-not-allowed"}`}
               style={{ height: "600px" }}
               value={memo.memo}
-              onChange={e => isAssigned && setMemo({...memo, memo: e.target.value})}
-              disabled={!isAssigned}
+              onChange={e => canEdit && setMemo({...memo, memo: e.target.value})}
+              disabled={!canEdit}
             />
           </div>
         </div>
