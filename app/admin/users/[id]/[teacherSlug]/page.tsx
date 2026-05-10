@@ -18,12 +18,6 @@ const SLUG_TO_TEACHER_ID: Record<string, string> = {
   tsuki: "17cf0ca1-7526-466e-a644-9d3efefa4091",
 }
 
-const TEACHER_ID_TO_SLUG: Record<string, string> = {
-  "cd2c4101-2e24-4ae2-8d6a-507a943904af": "hana",
-  "3ba85bb9-9065-461b-b76b-cc488d4c0c3b": "ryu",
-  "17cf0ca1-7526-466e-a644-9d3efefa4091": "tsuki",
-}
-
 const CATEGORY_OPTIONS = [
   { value: "", label: "-" },
   { value: "love", label: "恋愛" },
@@ -182,7 +176,6 @@ export default function UserDetailPage() {
   const [hasGeminiKey, setHasGeminiKey] = useState(false)
   const [selectedConsultation, setSelectedConsultation] = useState<Consultation | null>(null)
 
-  // ログイン先生がページの先生と同じなら編集可
   const canEdit = !!myTeacherId && myTeacherId === pageTeacherId
 
   useEffect(() => {
@@ -203,7 +196,6 @@ export default function UserDetailPage() {
       setHasGeminiKey(!!teacher?.gemini_api_key)
     }
 
-    // ユーザー名
     const { data: userData } = await supabase
       .from("users")
       .select("handle_name")
@@ -211,14 +203,12 @@ export default function UserDetailPage() {
       .single()
     setHandleName(userData?.handle_name ?? "-")
 
-    // 先生の料金マップ
     const { data: teachersData } = await supabase
       .from("teachers")
       .select("id, price_per_min")
     const priceMap: Record<string, number> = {}
     teachersData?.forEach(t => { priceMap[t.id] = t.price_per_min ?? 0 })
 
-    // 鑑定履歴（このページの先生分のみ）
     if (pageTeacherId) {
       const { data: cons } = await supabase
         .from("consultations")
@@ -248,7 +238,6 @@ export default function UserDetailPage() {
       )
       setConsultations(consultationList)
 
-      // teacher_memos（このページの先生分のみ）
       const { data: memoDataList } = await supabase
         .from("teacher_memos")
         .select("*")
@@ -272,7 +261,6 @@ export default function UserDetailPage() {
         })
       }
 
-      // フォローメール（このページの先生分のみ）
       const { count: fCount, data: fData } = await supabase
         .from("follow_mails")
         .select("sent_at", { count: "exact" })
@@ -284,7 +272,6 @@ export default function UserDetailPage() {
       setFollowMailCount(fCount ?? 0)
       setFollowMailLastAt(fData?.[0]?.sent_at ?? null)
 
-      // レビュー（このページの先生分のみ）
       const { count: rCount, data: rData } = await supabase
         .from("reviews")
         .select("created_at", { count: "exact" })
@@ -296,7 +283,6 @@ export default function UserDetailPage() {
       setReviewLastAt(rData?.[0]?.created_at ?? null)
     }
 
-    // user_profiles
     const { data: profileData } = await supabase
       .from("user_profiles")
       .select("birth_date, gender")
@@ -309,7 +295,6 @@ export default function UserDetailPage() {
       })
     }
 
-    // user_points（全先生分）
     const { data: pointsData } = await supabase
       .from("user_points")
       .select("teacher_id, points")
@@ -571,10 +556,14 @@ export default function UserDetailPage() {
                           : <span className="text-gray-400 text-xs">-</span>}
                       </td>
                       <td className="px-3 py-2 text-center">
-                        <button
-                          onClick={() => setSelectedConsultation(c)}
-                          className="text-xs bg-amber-500 hover:bg-amber-600 text-white px-2 py-0.5 rounded"
-                        >入</button>
+                        {canEdit ? (
+                          <button
+                            onClick={() => setSelectedConsultation(c)}
+                            className="text-xs bg-amber-500 hover:bg-amber-600 text-white px-2 py-0.5 rounded"
+                          >入</button>
+                        ) : (
+                          <span className="text-gray-300 text-xs">-</span>
+                        )}
                       </td>
                     </tr>
                   ))
@@ -666,7 +655,7 @@ export default function UserDetailPage() {
       </div>
     </div>
 
-    {selectedConsultation && (
+    {selectedConsultation && canEdit && (
       <ConsultationModal
         consultation={selectedConsultation}
         userName={handleName}
