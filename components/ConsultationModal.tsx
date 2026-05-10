@@ -22,10 +22,11 @@ type Props = {
   userId: string
   hasApiKey: boolean
   hasGeminiKey: boolean
+  canEdit: boolean
   onClose: () => void
 }
 
-export default function ConsultationModal({ consultation, userName, teacherName, userId, hasApiKey, hasGeminiKey, onClose }: Props) {
+export default function ConsultationModal({ consultation, userName, teacherName, userId, hasApiKey, hasGeminiKey, canEdit, onClose }: Props) {
   const [transcript, setTranscript] = useState<string>("")
   const [transcribing, setTranscribing] = useState(false)
   const [transcriptError, setTranscriptError] = useState<string | null>(null)
@@ -41,10 +42,8 @@ export default function ConsultationModal({ consultation, userName, teacherName,
 
   useEffect(() => {
     if (isChat) {
-      // チャットの場合はchat_messagesから履歴を取得
       fetchChatHistory()
     } else {
-      // 電話の場合は既存の文字起こしを取得
       fetchTranscript()
     }
   }, [consultation.id])
@@ -59,7 +58,6 @@ export default function ConsultationModal({ consultation, userName, teacherName,
   }
 
   const fetchChatHistory = async () => {
-    // consultationsのuser_questionにチャット履歴が入っている
     const { data } = await supabase
       .from("consultations")
       .select("user_question")
@@ -73,7 +71,6 @@ export default function ConsultationModal({ consultation, userName, teacherName,
     return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`
   }
 
-  // 自動文字起こし（電話のみ）
   const handleAutoTranscribe = async () => {
     setTranscribing(true)
     setTranscriptError(null)
@@ -100,18 +97,15 @@ export default function ConsultationModal({ consultation, userName, teacherName,
     }
   }
 
-  // テキストを保存
   const handleSaveTranscript = async () => {
     setUploadingText(true)
     try {
       if (isChat) {
-        // チャットの場合はconsultationsのuser_questionを更新
         await supabase
           .from("consultations")
           .update({ user_question: transcript, updated_at: new Date().toISOString() })
           .eq("id", consultation.id)
       } else {
-        // 電話の場合はcall_recordingsのtranscriptを更新
         const { data: rec } = await supabase
           .from("call_recordings")
           .select("id")
@@ -129,7 +123,6 @@ export default function ConsultationModal({ consultation, userName, teacherName,
     }
   }
 
-  // 要約を作る
   const handleSummarize = async () => {
     setSummarizing(true)
     setSummarizeError(null)
@@ -161,7 +154,6 @@ export default function ConsultationModal({ consultation, userName, teacherName,
     }
   }
 
-  // アフターメッセージを作る
   const handleGenerateAfterMessage = async () => {
     setGeneratingAfter(true)
     setAfterError(null)
@@ -193,7 +185,6 @@ export default function ConsultationModal({ consultation, userName, teacherName,
     }
   }
 
-  // テキストをダウンロード
   const handleDownloadTranscript = () => {
     const d = new Date(consultation.started_at)
     const suffix = isChat ? "chat" : "transcript"
@@ -216,7 +207,6 @@ export default function ConsultationModal({ consultation, userName, teacherName,
     >
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
 
-        {/* ヘッダー */}
         <div className="flex items-center justify-between p-4 border-b bg-gray-50 rounded-t-xl">
           <div>
             <div className="font-bold text-gray-800">{userName}</div>
@@ -237,11 +227,7 @@ export default function ConsultationModal({ consultation, userName, teacherName,
           {!isChat && consultation.signed_url && (
             <div className="bg-gray-50 rounded-lg p-3 border">
               <div className="text-xs font-medium text-gray-500 mb-2">🎵 音声</div>
-              <audio
-                src={consultation.signed_url}
-                controls
-                className="w-full"
-              />
+              <audio src={consultation.signed_url} controls className="w-full" />
             </div>
           )}
 
@@ -252,8 +238,8 @@ export default function ConsultationModal({ consultation, userName, teacherName,
                 {isChat ? "💬 チャット履歴" : "📝 文字起こし"}
               </div>
               <div className="flex gap-2">
-                {/* 自動文字起こし（電話のみ） */}
-                {!isChat && (
+                {/* 自動文字起こし（電話のみ・canEditのみ） */}
+                {!isChat && canEdit && (
                   <button
                     onClick={handleAutoTranscribe}
                     disabled={!hasApiKey || transcribing}
@@ -268,7 +254,7 @@ export default function ConsultationModal({ consultation, userName, teacherName,
                   </button>
                 )}
 
-                {/* DLボタン */}
+                {/* DLボタン（全員OK） */}
                 {hasTranscript && (
                   <button
                     onClick={handleDownloadTranscript}
@@ -283,74 +269,83 @@ export default function ConsultationModal({ consultation, userName, teacherName,
             )}
 
             <textarea
-              className="w-full border rounded p-2 text-sm resize-y min-h-32 focus:outline-none focus:border-teal-400"
+              className={`w-full border rounded p-2 text-sm resize-y min-h-32 focus:outline-none focus:border-teal-400 ${!canEdit ? "bg-gray-50" : ""}`}
               placeholder={isChat ? "チャット履歴が表示されます" : "ここにテキストを貼り付けるか、自動文字起こしを実行してください"}
               value={transcript}
-              onChange={e => setTranscript(e.target.value)}
+              onChange={e => canEdit && setTranscript(e.target.value)}
+              readOnly={!canEdit}
             />
 
-            <div className="flex items-center justify-between mt-2">
-              <span className="text-xs text-gray-400">{transcript.length}文字</span>
-              <button
-                onClick={handleSaveTranscript}
-                disabled={!hasTranscript || uploadingText}
-                className={`text-xs px-3 py-1 rounded font-medium ${
-                  hasTranscript
-                    ? "bg-blue-500 hover:bg-blue-600 text-white"
-                    : "bg-gray-200 text-gray-400 cursor-not-allowed"
-                }`}
-              >
-                {uploadingText ? "保存中..." : "💾 テキストを保存"}
-              </button>
-            </div>
+            {/* テキスト保存（canEditのみ） */}
+            {canEdit && (
+              <div className="flex items-center justify-between mt-2">
+                <span className="text-xs text-gray-400">{transcript.length}文字</span>
+                <button
+                  onClick={handleSaveTranscript}
+                  disabled={!hasTranscript || uploadingText}
+                  className={`text-xs px-3 py-1 rounded font-medium ${
+                    hasTranscript
+                      ? "bg-blue-500 hover:bg-blue-600 text-white"
+                      : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                  }`}
+                >
+                  {uploadingText ? "保存中..." : "💾 テキストを保存"}
+                </button>
+              </div>
+            )}
+            {!canEdit && (
+              <div className="mt-2">
+                <span className="text-xs text-gray-400">{transcript.length}文字</span>
+              </div>
+            )}
           </div>
 
-          {/* 要約・アフターメッセージ */}
-          {summarizeError && (
-            <div className="text-xs text-red-500 bg-red-50 p-2 rounded">{summarizeError}</div>
+          {/* 要約・アフターメッセージ（canEditのみ） */}
+          {canEdit && (
+            <>
+              {summarizeError && (
+                <div className="text-xs text-red-500 bg-red-50 p-2 rounded">{summarizeError}</div>
+              )}
+              {summarizeDone && (
+                <div className="text-xs text-green-600 bg-green-50 p-2 rounded">✅ 要約をメモに追記しました！</div>
+              )}
+              {afterError && (
+                <div className="text-xs text-red-500 bg-red-50 p-2 rounded">{afterError}</div>
+              )}
+              {afterDone && (
+                <div className="text-xs text-green-600 bg-green-50 p-2 rounded">
+                  ✅ アフターメッセージを下書き保存しました！
+                  <a href={`/admin/follow-mails/new/${userId}`} className="ml-2 underline text-blue-600" target="_blank">確認・送信 →</a>
+                </div>
+              )}
+              <div className="flex gap-2">
+                <button
+                  disabled={!hasTranscript || !hasGeminiKey || summarizing}
+                  onClick={handleSummarize}
+                  title={!hasGeminiKey ? "Gemini APIキーが設定されていません" : ""}
+                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    hasTranscript && hasGeminiKey
+                      ? "bg-purple-500 hover:bg-purple-600 text-white"
+                      : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                  }`}
+                >
+                  {summarizing ? "⌛ 生成中..." : "📋 要約を作る"}
+                </button>
+                <button
+                  disabled={!hasTranscript || !hasGeminiKey || generatingAfter}
+                  onClick={handleGenerateAfterMessage}
+                  title={!hasGeminiKey ? "Gemini APIキーが設定されていません" : ""}
+                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    hasTranscript && hasGeminiKey
+                      ? "bg-amber-500 hover:bg-amber-600 text-white"
+                      : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                  }`}
+                >
+                  {generatingAfter ? "⌛ 生成中..." : "✉️ アフターメッセージを作る"}
+                </button>
+              </div>
+            </>
           )}
-          {summarizeDone && (
-            <div className="text-xs text-green-600 bg-green-50 p-2 rounded">✅ 要約をメモに追記しました！</div>
-          )}
-          {afterError && (
-            <div className="text-xs text-red-500 bg-red-50 p-2 rounded">{afterError}</div>
-          )}
-          {afterDone && (
-            <div className="text-xs text-green-600 bg-green-50 p-2 rounded">
-              ✅ アフターメッセージを下書き保存しました！
-              <a
-                href={`/admin/follow-mails/new/${userId}`}
-                className="ml-2 underline text-blue-600"
-                target="_blank"
-              >確認・送信 →</a>
-            </div>
-          )}
-          <div className="flex gap-2">
-            <button
-              disabled={!hasTranscript || !hasGeminiKey || summarizing}
-              onClick={handleSummarize}
-              title={!hasGeminiKey ? "Gemini APIキーが設定されていません" : ""}
-              className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
-                hasTranscript && hasGeminiKey
-                  ? "bg-purple-500 hover:bg-purple-600 text-white"
-                  : "bg-gray-200 text-gray-400 cursor-not-allowed"
-              }`}
-            >
-              {summarizing ? "⌛ 生成中..." : "📋 要約を作る"}
-            </button>
-            <button
-              disabled={!hasTranscript || !hasGeminiKey || generatingAfter}
-              onClick={handleGenerateAfterMessage}
-              title={!hasGeminiKey ? "Gemini APIキーが設定されていません" : ""}
-              className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
-                hasTranscript && hasGeminiKey
-                  ? "bg-amber-500 hover:bg-amber-600 text-white"
-                  : "bg-gray-200 text-gray-400 cursor-not-allowed"
-              }`}
-            >
-              {generatingAfter ? "⌛ 生成中..." : "✉️ アフターメッセージを作る"}
-            </button>
-          </div>
 
         </div>
       </div>
