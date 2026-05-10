@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useSearchParams } from "next/navigation"
 import { supabase } from "@/lib/supabaseClient"
 import { formatJST } from "@/lib/utils"
 
@@ -13,7 +14,6 @@ type Consultation = {
   teacher_id: string
   user_id: string
   consultation_count: number
-  follow_mail_count: number
   call_duration: number
   price: number
   recording_url: string | null
@@ -21,10 +21,10 @@ type Consultation = {
 }
 
 const TEACHERS = [
-  { id: "e482fff7-25db-483d-8d68-46a893403be3", name: "宝明里茉" },
-  { id: "3ba85bb9-9065-461b-b76b-cc488d4c0c3b", name: "雲龍蓮" },
-  { id: "17cf0ca1-7526-466e-a644-9d3efefa4091", name: "椎名架月" },
-  { id: "cd2c4101-2e24-4ae2-8d6a-507a943904af", name: "青空花林" },
+  { id: "e482fff7-25db-483d-8d68-46a893403be3", name: "宝明里茉", slug: "" },
+  { id: "3ba85bb9-9065-461b-b76b-cc488d4c0c3b", name: "雲龍蓮", slug: "ryu" },
+  { id: "17cf0ca1-7526-466e-a644-9d3efefa4091", name: "椎名架月", slug: "tsuki" },
+  { id: "cd2c4101-2e24-4ae2-8d6a-507a943904af", name: "青空花林", slug: "hana" },
 ]
 
 const TEACHER_MAP: Record<string, string> = {
@@ -34,6 +34,12 @@ const TEACHER_MAP: Record<string, string> = {
   "cd2c4101-2e24-4ae2-8d6a-507a943904af": "青空花林",
 }
 
+const SLUG_TO_TEACHER_ID: Record<string, string> = {
+  "hana": "cd2c4101-2e24-4ae2-8d6a-507a943904af",
+  "ryu": "3ba85bb9-9065-461b-b76b-cc488d4c0c3b",
+  "tsuki": "17cf0ca1-7526-466e-a644-9d3efefa4091",
+}
+
 const TEACHER_ID_TO_SLUG: Record<string, string> = {
   "cd2c4101-2e24-4ae2-8d6a-507a943904af": "hana",
   "3ba85bb9-9065-461b-b76b-cc488d4c0c3b": "ryu",
@@ -41,26 +47,25 @@ const TEACHER_ID_TO_SLUG: Record<string, string> = {
 }
 
 function SourceBadge({ dataSource }: { dataSource: string | null }) {
-  if (dataSource === "mail") {
-    return <span className="bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full text-xs font-medium">メール</span>
-  }
-  if (dataSource === "ryugekka") {
-    return <span className="bg-green-100 text-green-800 px-2 py-0.5 rounded-full text-xs font-medium">電話</span>
-  }
-  if (dataSource === "chat") {
-    return <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-xs font-medium">チャット</span>
-  }
-  if (dataSource === "minden") {
-    return <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs font-medium">みんでん</span>
-  }
+  if (dataSource === "mail") return <span className="bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full text-xs font-medium">メール</span>
+  if (dataSource === "ryugekka") return <span className="bg-green-100 text-green-800 px-2 py-0.5 rounded-full text-xs font-medium">電話</span>
+  if (dataSource === "chat") return <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-xs font-medium">チャット</span>
+  if (dataSource === "minden") return <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs font-medium">みんでん</span>
   return <span className="text-gray-400 text-xs">-</span>
 }
 
 export default function ConsultationsPage() {
+  const searchParams = useSearchParams()
+  const urlUserId = searchParams.get("userId") ?? ""
+  const urlTeacherSlug = searchParams.get("teacherSlug") ?? ""
+  const urlTeacherId = urlTeacherSlug ? (SLUG_TO_TEACHER_ID[urlTeacherSlug] ?? "") : ""
+
   const [consultations, setConsultations] = useState<Consultation[]>([])
   const [loading, setLoading] = useState(true)
-  const [teacherFilter, setTeacherFilter] = useState("")
+  const [teacherFilter, setTeacherFilter] = useState(urlTeacherId)
   const [monthFilter, setMonthFilter] = useState("")
+  const [userIdFilter] = useState(urlUserId)
+  const [userNameFilter, setUserNameFilter] = useState("")
 
   useEffect(() => {
     fetchConsultations()
@@ -95,9 +100,11 @@ export default function ConsultationsPage() {
       from += 1000
     }
 
-    const userConsultationCount: Record<string, number> = {}
+    // ユーザーごとの鑑定回数（先生別）
+    const userTeacherCount: Record<string, number> = {}
     allData.forEach((c) => {
-      userConsultationCount[c.user_id] = (userConsultationCount[c.user_id] ?? 0) + 1
+      const key = `${c.user_id}_${c.teacher_id}`
+      userTeacherCount[key] = (userTeacherCount[key] ?? 0) + 1
     })
 
     const formatted = allData.map((c: any) => ({
@@ -108,8 +115,7 @@ export default function ConsultationsPage() {
       teacher_name: TEACHER_MAP[c.teacher_id] ?? c.teacher_name ?? "-",
       teacher_id: c.teacher_id,
       user_id: c.user_id,
-      consultation_count: userConsultationCount[c.user_id] ?? 0,
-      follow_mail_count: 0,
+      consultation_count: userTeacherCount[`${c.user_id}_${c.teacher_id}`] ?? 0,
       call_duration: c.call_duration ?? 0,
       price: c.price ?? 0,
       recording_url: c.call_recordings?.[0]?.recording_url ?? null,
@@ -127,6 +133,8 @@ export default function ConsultationsPage() {
   const filtered = consultations.filter(c => {
     if (teacherFilter && c.teacher_id !== teacherFilter) return false
     if (monthFilter && c.started_at?.slice(0, 7) !== monthFilter) return false
+    if (userIdFilter && c.user_id !== userIdFilter) return false
+    if (userNameFilter && !c.user_name?.includes(userNameFilter)) return false
     return true
   })
 
@@ -134,11 +142,19 @@ export default function ConsultationsPage() {
 
   return (
     <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold">鑑定履歴（{filtered.length}件）</h1>
+        {urlUserId && (
+          <a
+            href={`/admin/users/${urlUserId}`}
+            className="text-xs text-gray-400 hover:underline"
+          >
+            ← ユーザー先生別一覧に戻る
+          </a>
+        )}
       </div>
 
-      <div className="flex gap-3 mb-4">
+      <div className="flex gap-3 mb-4 flex-wrap">
         <select
           className="border rounded px-3 py-1.5 text-sm"
           value={teacherFilter}
@@ -160,6 +176,16 @@ export default function ConsultationsPage() {
             <option key={m} value={m!}>{m}</option>
           ))}
         </select>
+
+        {!urlUserId && (
+          <input
+            type="text"
+            placeholder="名前で絞り込み..."
+            className="border rounded px-3 py-1.5 text-sm"
+            value={userNameFilter}
+            onChange={(e) => setUserNameFilter(e.target.value)}
+          />
+        )}
       </div>
 
       <div className="rounded-md border overflow-x-auto">
@@ -172,21 +198,16 @@ export default function ConsultationsPage() {
               <th className="text-left px-3 py-3 font-medium whitespace-nowrap">先生</th>
               <th className="text-center px-3 py-3 font-medium whitespace-nowrap">種別</th>
               <th className="text-center px-3 py-3 font-medium whitespace-nowrap">鑑定回数</th>
-              <th className="text-center px-3 py-3 font-medium whitespace-nowrap">メール回数</th>
               <th className="text-center px-3 py-3 font-medium whitespace-nowrap">鑑定分数</th>
-              <th className="text-center px-3 py-3 font-medium whitespace-nowrap">報酬</th>
+              <th className="text-center px-3 py-3 font-medium whitespace-nowrap">消費pt</th>
               <th className="text-center px-3 py-3 font-medium whitespace-nowrap">音声</th>
               <th className="text-center px-3 py-3 font-medium whitespace-nowrap">鑑定メモ</th>
-              <th className="text-center px-3 py-3 font-medium whitespace-nowrap">ユーザーレビュー</th>
-              <th className="text-center px-3 py-3 font-medium whitespace-nowrap">返信状況</th>
             </tr>
           </thead>
           <tbody>
             {filtered.map((c, i) => {
               const slug = TEACHER_ID_TO_SLUG[c.teacher_id] ?? null
-              const userDetailUrl = c.user_id && slug
-                ? `/admin/users/${c.user_id}/${slug}`
-                : c.user_id
+              const userDetailUrl = c.user_id
                 ? `/admin/users/${c.user_id}`
                 : null
 
@@ -209,13 +230,8 @@ export default function ConsultationsPage() {
                       {c.consultation_count}回
                     </span>
                   </td>
-                  <td className="px-3 py-2 text-center">
-                    <span className="bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full text-xs font-medium">
-                      {c.follow_mail_count}回
-                    </span>
-                  </td>
                   <td className="px-3 py-2 text-center">{c.call_duration}分</td>
-                  <td className="px-3 py-2 text-center">{c.price.toLocaleString()}円</td>
+                  <td className="px-3 py-2 text-center">{c.price.toLocaleString()}pt</td>
                   <td className="px-3 py-2 text-center">
                     {c.recording_url
                       ? <a href={c.recording_url} target="_blank" className="text-blue-600 hover:underline text-xs">再生</a>
@@ -225,8 +241,6 @@ export default function ConsultationsPage() {
                   <td className="px-3 py-2 text-center">
                     <button className="text-xs bg-amber-500 hover:bg-amber-600 text-white px-2 py-0.5 rounded">入</button>
                   </td>
-                  <td className="px-3 py-2 text-center text-gray-400 text-xs">-</td>
-                  <td className="px-3 py-2 text-center text-gray-400 text-xs">-</td>
                 </tr>
               )
             })}

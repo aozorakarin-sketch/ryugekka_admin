@@ -101,13 +101,14 @@ export default function UserTeacherListPage() {
               <th className="text-left px-4 py-3 font-medium">先生</th>
               <th className="text-center px-4 py-3 font-medium">鑑定回数</th>
               <th className="text-left px-4 py-3 font-medium">最終鑑定日</th>
-              <th className="text-left px-4 py-3 font-medium"></th>
+              <th className="text-center px-4 py-3 font-medium">鑑定履歴</th>
+              <th className="text-center px-4 py-3 font-medium">ユーザー詳細</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-gray-400">
+                <td colSpan={5} className="px-4 py-8 text-center text-gray-400">
                   鑑定履歴がありません
                 </td>
               </tr>
@@ -121,7 +122,19 @@ export default function UserTeacherListPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-gray-500">{formatDate(row.last_consultation_at)}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 text-center">
+                    {row.slug ? (
+                      <a
+                        href={`/admin/consultations?userId=${id}&teacherSlug=${row.slug}`}
+                        className="text-xs bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded"
+                      >
+                        一覧
+                      </a>
+                    ) : (
+                      <span className="text-xs text-gray-400">-</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-center">
                     {row.slug ? (
                       <a
                         href={`/admin/users/${id}/${row.slug}`}
