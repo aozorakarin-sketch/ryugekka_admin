@@ -34,6 +34,12 @@ const TEACHER_MAP: Record<string, string> = {
   "cd2c4101-2e24-4ae2-8d6a-507a943904af": "青空花林",
 }
 
+const TEACHER_ID_TO_SLUG: Record<string, string> = {
+  "cd2c4101-2e24-4ae2-8d6a-507a943904af": "hana",
+  "3ba85bb9-9065-461b-b76b-cc488d4c0c3b": "ryu",
+  "17cf0ca1-7526-466e-a644-9d3efefa4091": "tsuki",
+}
+
 function SourceBadge({ dataSource }: { dataSource: string | null }) {
   if (dataSource === "mail") {
     return <span className="bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full text-xs font-medium">メール</span>
@@ -176,42 +182,54 @@ export default function ConsultationsPage() {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((c, i) => (
-              <tr key={c.id} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-                <td className="px-3 py-2 whitespace-nowrap text-xs">{formatJST(c.started_at)}</td>
-                <td className="px-3 py-2 whitespace-nowrap text-xs">{formatJST(c.ended_at)}</td>
-                <td className="px-3 py-2 font-medium whitespace-nowrap">
-                  {c.user_id ? <a href={`/admin/users/${c.user_id}`} className="text-blue-600 hover:underline">{c.user_name}</a> : <span>{c.user_name}</span>}
-                </td>
-                <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-600">{c.teacher_name}</td>
-                <td className="px-3 py-2 text-center">
-                  <SourceBadge dataSource={c.data_source} />
-                </td>
-                <td className="px-3 py-2 text-center">
-                  <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-xs font-medium">
-                    {c.consultation_count}回
-                  </span>
-                </td>
-                <td className="px-3 py-2 text-center">
-                  <span className="bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full text-xs font-medium">
-                    {c.follow_mail_count}回
-                  </span>
-                </td>
-                <td className="px-3 py-2 text-center">{c.call_duration}分</td>
-                <td className="px-3 py-2 text-center">{c.price.toLocaleString()}円</td>
-                <td className="px-3 py-2 text-center">
-                  {c.recording_url
-                    ? <a href={c.recording_url} target="_blank" className="text-blue-600 hover:underline text-xs">再生</a>
-                    : <span className="text-gray-400 text-xs">-</span>
-                  }
-                </td>
-                <td className="px-3 py-2 text-center">
-                  <button className="text-xs bg-amber-500 hover:bg-amber-600 text-white px-2 py-0.5 rounded">入</button>
-                </td>
-                <td className="px-3 py-2 text-center text-gray-400 text-xs">-</td>
-                <td className="px-3 py-2 text-center text-gray-400 text-xs">-</td>
-              </tr>
-            ))}
+            {filtered.map((c, i) => {
+              const slug = TEACHER_ID_TO_SLUG[c.teacher_id] ?? null
+              const userDetailUrl = c.user_id && slug
+                ? `/admin/users/${c.user_id}/${slug}`
+                : c.user_id
+                ? `/admin/users/${c.user_id}`
+                : null
+
+              return (
+                <tr key={c.id} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                  <td className="px-3 py-2 whitespace-nowrap text-xs">{formatJST(c.started_at)}</td>
+                  <td className="px-3 py-2 whitespace-nowrap text-xs">{formatJST(c.ended_at)}</td>
+                  <td className="px-3 py-2 font-medium whitespace-nowrap">
+                    {userDetailUrl
+                      ? <a href={userDetailUrl} className="text-blue-600 hover:underline">{c.user_name}</a>
+                      : <span>{c.user_name}</span>
+                    }
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-600">{c.teacher_name}</td>
+                  <td className="px-3 py-2 text-center">
+                    <SourceBadge dataSource={c.data_source} />
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-xs font-medium">
+                      {c.consultation_count}回
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    <span className="bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full text-xs font-medium">
+                      {c.follow_mail_count}回
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 text-center">{c.call_duration}分</td>
+                  <td className="px-3 py-2 text-center">{c.price.toLocaleString()}円</td>
+                  <td className="px-3 py-2 text-center">
+                    {c.recording_url
+                      ? <a href={c.recording_url} target="_blank" className="text-blue-600 hover:underline text-xs">再生</a>
+                      : <span className="text-gray-400 text-xs">-</span>
+                    }
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    <button className="text-xs bg-amber-500 hover:bg-amber-600 text-white px-2 py-0.5 rounded">入</button>
+                  </td>
+                  <td className="px-3 py-2 text-center text-gray-400 text-xs">-</td>
+                  <td className="px-3 py-2 text-center text-gray-400 text-xs">-</td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
