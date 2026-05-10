@@ -38,7 +38,6 @@ type Template = {
   body: string
 }
 
-// 半星SVG
 function StarIcon({ fill }: { fill: "full" | "half" | "empty" }) {
   const filled = "#f0c040"
   const empty = "#ddd"
@@ -160,11 +159,33 @@ export default function ReviewsPage() {
   const saveReply = async (send: boolean) => {
     if (!targetReview) return
     setSaving(true)
-    await supabase.from("reviews").update({
-      reply_comment: replyContent,
-      is_replied: send,
-      updated_at: new Date().toISOString(),
-    }).eq("id", targetReview.id)
+
+    if (send) {
+      // まず reply_comment を保存
+      await supabase.from("reviews").update({
+        reply_comment: replyContent,
+        updated_at: new Date().toISOString(),
+      }).eq("id", targetReview.id)
+
+      // Edge Function でメール送信 + is_replied: true
+      const { error } = await supabase.functions.invoke("send-review-reply", {
+        body: { review_id: targetReview.id },
+      })
+
+      if (error) {
+        alert("送信に失敗しました: " + error.message)
+        setSaving(false)
+        return
+      }
+    } else {
+      // 保存のみ（下書き）
+      await supabase.from("reviews").update({
+        reply_comment: replyContent,
+        is_replied: false,
+        updated_at: new Date().toISOString(),
+      }).eq("id", targetReview.id)
+    }
+
     setSaving(false)
     setShowModal(false)
     fetchAll()
@@ -201,7 +222,7 @@ export default function ReviewsPage() {
                     {r.is_replied ? "返信済" : "未返信"}
                   </span>
                 </div>
-                {/* 鑑定日時・種別 */}
+                {/* 鑑定日時・種別・レビュー日時 */}
                 <div className="flex items-center gap-2 mb-2 flex-wrap">
                   {r.started_at && (
                     <span className="text-xs text-gray-500">鑑定：{formatDateTime(r.started_at)}</span>
@@ -249,6 +270,7 @@ export default function ReviewsPage() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
             <h2 className="text-lg font-bold mb-1">返信</h2>
+
             {/* モーダル内レビュー情報 */}
             <div className="bg-gray-50 rounded-lg p-3 mb-4 space-y-1">
               <div className="flex items-center gap-2 flex-wrap">
@@ -296,14 +318,19 @@ export default function ReviewsPage() {
                   placeholder="返信内容を入力してください" />
               </div>
             </div>
+
             <div className="flex justify-between mt-4">
               <button onClick={() => setShowModal(false)}
                 className="text-sm bg-gray-400 hover:bg-gray-500 text-white px-4 py-1.5 rounded">閉じる</button>
               <div className="flex gap-2">
                 <button onClick={() => saveReply(false)} disabled={saving}
-                  className="text-sm bg-gray-500 hover:bg-gray-600 text-white px-4 py-1.5 rounded">保存</button>
+                  className="text-sm bg-gray-500 hover:bg-gray-600 text-white px-4 py-1.5 rounded disabled:opacity-50">
+                  {saving ? "保存中..." : "保存"}
+                </button>
                 <button onClick={() => saveReply(true)} disabled={saving || !replyContent}
-                  className="text-sm bg-teal-500 hover:bg-teal-600 text-white px-4 py-1.5 rounded disabled:opacity-50">送信</button>
+                  className="text-sm bg-teal-500 hover:bg-teal-600 text-white px-4 py-1.5 rounded disabled:opacity-50">
+                  {saving ? "送信中..." : "送信"}
+                </button>
               </div>
             </div>
           </div>
