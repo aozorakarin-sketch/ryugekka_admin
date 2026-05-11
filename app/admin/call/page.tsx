@@ -55,8 +55,8 @@ export default function CallPage() {
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const callRingRef = useRef<HTMLAudioElement | null>(null)
-  const alertRingRef = useRef<HTMLAudioElement | null>(null)       // 2分後アラート用
-  const alertTimerRef = useRef<NodeJS.Timeout | null>(null)        // 2分タイマー
+  const alertRingRef = useRef<HTMLAudioElement | null>(null)
+  const alertTimerRef = useRef<NodeJS.Timeout | null>(null)
   const teacherRef = useRef<{ id: string; name: string; channel: string } | null>(null)
   const callingEntryIdRef = useRef<string | null>(null)
   const statusRef = useRef<"idle" | "calling" | "connected">("idle")
@@ -115,7 +115,6 @@ export default function CallPage() {
     }
   }
 
-  // 2分後アラートコール音
   const playAlertRing = () => {
     const audio = new Audio("/sounds/call_ring.mp3")
     audio.loop = true
@@ -131,11 +130,9 @@ export default function CallPage() {
     }
   }
 
-  // 2分タイマー：お客様が来てから2分後にコール音を鳴らす
   const startAlertTimer = () => {
     clearAlertTimer()
     alertTimerRef.current = setTimeout(() => {
-      // まだ idle（通話開始していない）なら鳴らす
       if (statusRef.current === "idle") {
         playAlertRing()
         addToast("⏰ お客様が2分以上お待ちです！", "warning")
@@ -160,17 +157,14 @@ export default function CallPage() {
       const audioContext = new AudioContext()
       audioContextRef.current = audioContext
       const destination = audioContext.createMediaStreamDestination()
-
       const localStream = new MediaStream([localTrack.getMediaStreamTrack()])
       const localSource = audioContext.createMediaStreamSource(localStream)
       localSource.connect(destination)
-
       if (remoteTrack) {
         const remoteStream = new MediaStream([remoteTrack.getMediaStreamTrack()])
         const remoteSource = audioContext.createMediaStreamSource(remoteStream)
         remoteSource.connect(destination)
       }
-
       const recorder = new MediaRecorder(destination.stream)
       chunksRef.current = []
       recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data) }
@@ -188,25 +182,19 @@ export default function CallPage() {
       const token = await getToken(teacherRef.current.channel)
       const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" })
       clientRef.current = client
-
       client.on("user-published", async (remoteUser: any, mediaType: "audio" | "video") => {
         await client.subscribe(remoteUser, mediaType)
         if (mediaType === "audio") {
           remoteUser.audioTrack.play()
           remoteTrackRef.current = remoteUser.audioTrack
-          if (localTrackRef.current) {
-            startMixedRecording(localTrackRef.current, remoteUser.audioTrack)
-          }
+          if (localTrackRef.current) startMixedRecording(localTrackRef.current, remoteUser.audioTrack)
         }
       })
-
       client.on("user-left", async () => { await endCall() })
-
       await client.join(APP_ID, teacherRef.current.channel, token, null)
       const localTrack = await AgoraRTC.createMicrophoneAudioTrack()
       localTrackRef.current = localTrack
       await client.publish([localTrack])
-
     } catch (err: any) {
       console.error(err)
       updateStatus("idle")
@@ -223,11 +211,13 @@ export default function CallPage() {
       .on("postgres_changes", {
         event: "INSERT", schema: "public", table: "waiting_queue",
         filter: `teacher_id=eq.${teacherId}`,
-      }, () => {
+      }, (payload) => {
+        // ★ ダミーユーザーの追加は通知しない
+        if (payload.new.data_source === "dummy") return
         playNotification()
         addToast("📞 新しいお客様が来ました！")
         fetchWaitingList(teacherId)
-        startAlertTimer() // お客様が来たら2分タイマー開始
+        startAlertTimer()
       })
       .on("postgres_changes", {
         event: "UPDATE", schema: "public", table: "waiting_queue",
@@ -247,19 +237,23 @@ export default function CallPage() {
           await joinAgora()
           startTimer()
         }
-
         if (newStatus === "cancelled" && entryId === callingEntryIdRef.current) {
           stopCallRing()
           updateStatus("idle")
           callingEntryIdRef.current = null
           setCallingEntryId(null)
         }
-
         if (newStatus === "completed" && endReason === "point_exhausted") {
           addToast("⚠️ お客様のポイント不足で切電されました", "warning")
           await endCall()
         }
-
+        fetchWaitingList(teacherId)
+      })
+      .on("postgres_changes", {
+        event: "DELETE", schema: "public", table: "waiting_queue",
+        filter: `teacher_id=eq.${teacherId}`,
+      }, () => {
+        // ★ ダミー削除時も待機リストを更新
         fetchWaitingList(teacherId)
       })
       .subscribe()
@@ -268,22 +262,28 @@ export default function CallPage() {
   const fetchWaitingList = async (teacherId: string) => {
     const { data } = await supabase
       .from("waiting_queue")
-      .select("id, user_id, status, requested_at, agora_channel")
+      .select("id, user_id, status, requested_at, agora_channel, user_name")
       .eq("teacher_id", teacherId)
       .eq("status", "waiting")
+      .neq("data_source", "dummy") // ★ ダミーを除外
       .order("requested_at", { ascending: true })
 
     if (!data) { setWaitingList([]); setWaitingCount(0); return }
 
-    // ユーザー名と鑑定回数を取得
+    // ★ user_nameはテーブルに直接入ってるのでそちらを優先、なければusersテーブルから取得
     const enriched = await Promise.all(data.map(async (entry) => {
-      const [{ data: userData }, { count }] = await Promise.all([
-        supabase.from("users").select("handle_name").eq("id", entry.user_id).single(),
-        supabase.from("consultations").select("*", { count: "exact", head: true }).eq("user_id", entry.user_id),
-      ])
+      let displayName = entry.user_name ?? null
+      if (!displayName && entry.user_id) {
+        const { data: userData } = await supabase
+          .from("users").select("handle_name").eq("id", entry.user_id).single()
+        displayName = userData?.handle_name ?? null
+      }
+      const { count } = await supabase
+        .from("consultations").select("*", { count: "exact", head: true })
+        .eq("user_id", entry.user_id)
       return {
         ...entry,
-        user_name: userData?.handle_name ?? null,
+        user_name: displayName,
         consultation_count: count ?? 0,
       }
     }))
@@ -294,8 +294,8 @@ export default function CallPage() {
 
   const startCallToCustomer = async (entryId: string) => {
     if (!teacherRef.current) return
-    stopAlertRing()      // コール音を止める
-    clearAlertTimer()    // タイマーもクリア
+    stopAlertRing()
+    clearAlertTimer()
     await supabase.from("waiting_queue").update({ status: "calling" }).eq("id", entryId)
     callingEntryIdRef.current = entryId
     setCallingEntryId(entryId)
@@ -318,11 +318,7 @@ export default function CallPage() {
       }
     }
 
-    if (audioContextRef.current) {
-      audioContextRef.current.close()
-      audioContextRef.current = null
-    }
-
+    if (audioContextRef.current) { audioContextRef.current.close(); audioContextRef.current = null }
     if (localTrackRef.current) { localTrackRef.current.close(); localTrackRef.current = null }
     if (clientRef.current) { await clientRef.current.leave(); clientRef.current = null }
     remoteTrackRef.current = null
@@ -330,10 +326,7 @@ export default function CallPage() {
     const queueId = currentQueueId || callingEntryIdRef.current
     if (queueId && teacherRef.current) {
       const { data: existing } = await supabase
-        .from("waiting_queue")
-        .select("end_reason, user_id, call_started_at")
-        .eq("id", queueId)
-        .single()
+        .from("waiting_queue").select("end_reason, user_id, call_started_at").eq("id", queueId).single()
 
       if (existing?.end_reason !== "point_exhausted") {
         await supabase.from("waiting_queue")
@@ -348,12 +341,9 @@ export default function CallPage() {
           : new Date(now.getTime() - duration * 1000)
 
         const { data: userData } = await supabase
-          .from("users")
-          .select("handle_name")
-          .eq("id", existing.user_id)
-          .single()
+          .from("users").select("handle_name").eq("id", existing.user_id).single()
 
-        const { error: insertError } = await supabase.from("consultations").insert({
+        await supabase.from("consultations").insert({
           user_id: existing.user_id,
           teacher_id: teacherRef.current.id,
           started_at: startedAt.toISOString(),
@@ -364,12 +354,7 @@ export default function CallPage() {
           teacher_name: teacherRef.current.name,
           data_source: "ryugekka",
         })
-
-        if (insertError) {
-          console.error("consultations INSERT エラー:", insertError)
-        }
       }
-
       setCurrentQueueId(null)
     }
 
@@ -385,18 +370,14 @@ export default function CallPage() {
 
   const fetchRecordings = async (teacherId: string) => {
     const { data } = await supabase
-      .from("call_recordings")
-      .select("id, recording_url, created_at, recording_duration")
-      .eq("teacher_id", teacherId)
-      .order("created_at", { ascending: false })
-      .limit(20)
+      .from("call_recordings").select("id, recording_url, created_at, recording_duration")
+      .eq("teacher_id", teacherId).order("created_at", { ascending: false }).limit(20)
     setRecordings(data ?? [])
   }
 
   const getToken = async (channelName: string) => {
     const res = await fetch("/api/agora-token", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ channelName, uid: 0 }),
     })
     const data = await res.json()
@@ -406,10 +387,7 @@ export default function CallPage() {
   const startTimer = () => {
     callTimeRef.current = 0
     setCallTime(0)
-    timerRef.current = setInterval(() => {
-      callTimeRef.current += 1
-      setCallTime(t => t + 1)
-    }, 1000)
+    timerRef.current = setInterval(() => { callTimeRef.current += 1; setCallTime(t => t + 1) }, 1000)
   }
 
   const stopTimer = () => {
@@ -436,16 +414,11 @@ export default function CallPage() {
       const { error } = await supabase.storage.from("recordings").upload(fileName, blob, { contentType: "audio/webm" })
       if (error) throw error
       await supabase.from("call_recordings").insert({
-        teacher_id: teacher.id,
-        recording_url: fileName,
-        recording_duration: duration,
-        created_at: new Date().toISOString(),
-        data_source: "ryugekka",
+        teacher_id: teacher.id, recording_url: fileName,
+        recording_duration: duration, created_at: new Date().toISOString(), data_source: "ryugekka",
       })
       await fetchRecordings(teacher.id)
-    } catch (err) {
-      console.error("アップロードエラー:", err)
-    }
+    } catch (err) { console.error("アップロードエラー:", err) }
     setUploading(false)
   }
 
@@ -478,10 +451,7 @@ export default function CallPage() {
   }
 
   const toggleMute = () => {
-    if (localTrackRef.current) {
-      localTrackRef.current.setEnabled(muted)
-      setMuted(!muted)
-    }
+    if (localTrackRef.current) { localTrackRef.current.setEnabled(muted); setMuted(!muted) }
   }
 
   return (
@@ -489,8 +459,7 @@ export default function CallPage() {
       <div style={{ position: "fixed", top: 20, right: 20, zIndex: 9999, display: "flex", flexDirection: "column", gap: 8 }}>
         {toasts.map((toast, i) => (
           <div key={i} style={{
-            background: "#fff", borderRadius: 12,
-            boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
+            background: "#fff", borderRadius: 12, boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
             border: toast.type === 'warning' ? "1px solid #ffcccc" : "1px solid #d1fae5",
             padding: "12px 16px", fontSize: "0.9rem", fontWeight: 600,
             color: toast.type === 'warning' ? "#c0392b" : "#065f46",
@@ -515,11 +484,9 @@ export default function CallPage() {
           {status === "calling" && "呼び出し中..."}
           {status === "connected" && "通話中"}
         </p>
-
         {status === "idle" && waitingList.length === 0 && (
           <p className="text-sm text-gray-400">待機中のお客様はいません</p>
         )}
-
         {status !== "idle" && (
           <div className="flex items-center justify-center gap-6">
             <button onClick={toggleMute}
@@ -532,7 +499,6 @@ export default function CallPage() {
             </button>
           </div>
         )}
-
         {uploading && <p className="text-xs text-gray-400 mt-4">録音をアップロード中...</p>}
       </div>
 
@@ -547,18 +513,12 @@ export default function CallPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <a
-                      href={`/admin/users/${entry.user_id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-blue-600 hover:underline font-medium"
-                    >
+                    <a href={`/admin/users/${entry.user_id}`} target="_blank" rel="noopener noreferrer"
+                      className="text-sm text-blue-600 hover:underline font-medium">
                       {entry.user_name ?? "お客様"}
                     </a>
                     <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
-                      entry.consultation_count === 0
-                        ? "bg-green-100 text-green-700"
-                        : "bg-blue-100 text-blue-700"
+                      entry.consultation_count === 0 ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
                     }`}>
                       {entry.consultation_count === 0 ? "新規" : `リピーター(${entry.consultation_count}回)`}
                     </span>
