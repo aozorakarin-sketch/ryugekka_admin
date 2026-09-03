@@ -12,6 +12,7 @@ const EMAIL_TO_TEACHER: Record<string, { id: string; name: string }> = {
 export default function SettingsPage() {
   const [teacher, setTeacher] = useState<{ id: string; name: string } | null>(null)
   const [pricePerMin, setPricePerMin] = useState(100)
+  const [chatPricePerMin, setChatPricePerMin] = useState(100)
   const [minMinutes, setMinMinutes] = useState(1)
   const [status, setStatus] = useState("offline")
   const [loading, setLoading] = useState(true)
@@ -28,12 +29,13 @@ export default function SettingsPage() {
 
     const { data } = await supabase
       .from("teachers")
-      .select("price_per_min, min_minutes, status")
+      .select("price_per_min, chat_price_per_min, min_minutes, status")
       .eq("id", t.id)
       .single()
 
     if (data) {
       setPricePerMin(data.price_per_min ?? 100)
+      setChatPricePerMin(data.chat_price_per_min ?? 100)
       setMinMinutes(data.min_minutes ?? 1)
       setStatus(data.status ?? "offline")
     }
@@ -47,6 +49,7 @@ export default function SettingsPage() {
       .from("teachers")
       .update({
         price_per_min: pricePerMin,
+        chat_price_per_min: chatPricePerMin,
         min_minutes: minMinutes,
         status,
         updated_at: new Date().toISOString(),
@@ -87,9 +90,9 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* 料金設定 */}
+      {/* 通話料金設定 */}
       <div className="bg-white border rounded-lg p-5 mb-4">
-        <h2 className="font-bold text-gray-700 mb-4">料金設定</h2>
+        <h2 className="font-bold text-gray-700 mb-4">☎️ 通話料金設定</h2>
 
         <div className="mb-5">
           <label className="block text-sm font-medium text-gray-600 mb-2">1分あたりの料金（円）</label>
@@ -137,9 +140,9 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* 料金シミュレーター */}
+      {/* 通話料金シミュレーター */}
       <div className="bg-teal-50 border border-teal-200 rounded-lg p-4 mb-6">
-        <h2 className="font-bold text-teal-700 mb-2 text-sm">料金シミュレーター</h2>
+        <h2 className="font-bold text-teal-700 mb-2 text-sm">通話料金シミュレーター</h2>
         <div className="space-y-1 text-sm text-teal-800">
           {[5, 10, 20, 30].map(min => (
             <div key={min} className="flex justify-between">
@@ -147,6 +150,46 @@ export default function SettingsPage() {
               <span className="font-bold">
                 {min <= minMinutes ? "0円（最低時間内）" : `${(min - minMinutes) * pricePerMin}円`}
               </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* チャット料金設定 */}
+      <div className="bg-white border rounded-lg p-5 mb-4">
+        <h2 className="font-bold text-gray-700 mb-4">💬 チャット料金設定</h2>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-600 mb-2">1分あたりの料金（円）</label>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setChatPricePerMin(p => Math.max(10, p - 10))}
+              className="w-10 h-10 rounded-full bg-gray-200 hover:bg-gray-300 text-lg font-bold"
+            >－</button>
+            <input
+              type="number"
+              value={chatPricePerMin}
+              onChange={e => setChatPricePerMin(Number(e.target.value))}
+              className="w-24 text-center text-2xl font-bold border rounded px-2 py-1"
+              min={10}
+            />
+            <button
+              onClick={() => setChatPricePerMin(p => p + 10)}
+              className="w-10 h-10 rounded-full bg-gray-200 hover:bg-gray-300 text-lg font-bold"
+            >＋</button>
+            <span className="text-gray-500">円 / 分</span>
+          </div>
+        </div>
+      </div>
+
+      {/* チャット料金シミュレーター */}
+      <div className="bg-pink-50 border border-pink-200 rounded-lg p-4 mb-6">
+        <h2 className="font-bold text-pink-700 mb-2 text-sm">チャット料金シミュレーター</h2>
+        <div className="space-y-1 text-sm text-pink-800">
+          {[5, 10, 20, 30].map(min => (
+            <div key={min} className="flex justify-between">
+              <span>{min}分チャット</span>
+              <span className="font-bold">{min * chatPricePerMin}円</span>
             </div>
           ))}
         </div>
