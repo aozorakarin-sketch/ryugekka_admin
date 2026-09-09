@@ -227,6 +227,12 @@ export default function CallPage() {
         const entryId = payload.new.id
         const endReason = payload.new.end_reason
 
+        // ★ お客様が「電話をかける」を押した（calling） → 着信音を鳴らして知らせる
+        if (newStatus === "calling" && statusRef.current === "idle") {
+          playAlertRing()
+          addToast("🔔 お客様から着信があります！")
+        }
+
         if (newStatus === "in_call" && entryId === callingEntryIdRef.current && statusRef.current === "calling") {
           stopCallRing()
           stopAlertRing()
@@ -264,7 +270,8 @@ export default function CallPage() {
       .from("waiting_queue")
       .select("id, user_id, status, requested_at, agora_channel, user_name")
       .eq("teacher_id", teacherId)
-      .eq("status", "waiting")
+      // ★ 'calling'（お客様が電話をかけた状態）も引き続き表示対象にする
+      .in("status", ["waiting", "calling"])
       .neq("data_source", "dummy") // ★ ダミーを除外
       .order("requested_at", { ascending: true })
 
@@ -288,6 +295,12 @@ export default function CallPage() {
       }
     }))
 
+    // ★ 着信中（calling）のお客様を先頭に表示
+    enriched.sort((a, b) => {
+      if (a.status === b.status) return 0
+      return a.status === "calling" ? -1 : 1
+    })
+
     setWaitingList(enriched)
     setWaitingCount(enriched.length)
   }
@@ -296,7 +309,10 @@ export default function CallPage() {
     if (!teacherRef.current) return
     stopAlertRing()
     clearAlertTimer()
-    await supabase.from("waiting_queue").update({ status: "calling" }).eq("id", entryId)
+    // ★ ここで 'in_call' にすることで、お客様側の着信音・応答ボタンが発火する
+    await supabase.from("waiting_queue")
+      .update({ status: "in_call", call_started_at: new Date().toISOString() })
+      .eq("id", entryId)
     callingEntryIdRef.current = entryId
     setCallingEntryId(entryId)
     updateStatus("calling")
@@ -506,36 +522,44 @@ export default function CallPage() {
         <div className="mb-6">
           <h2 className="font-bold text-gray-700 mb-3">待機中のお客様</h2>
           <div className="space-y-2">
-            {waitingList.map((entry, index) => (
-              <div key={entry.id} className="bg-white border rounded-xl px-4 py-3 flex items-center gap-3 shadow-sm">
-                <div className="w-8 h-8 rounded-full bg-teal-100 flex items-center justify-center text-sm font-bold text-teal-600 shrink-0">
-                  {index + 1}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <a href={`/admin/users/${entry.user_id}`} target="_blank" rel="noopener noreferrer"
-                      className="text-sm text-blue-600 hover:underline font-medium">
-                      {entry.user_name ?? "お客様"}
-                    </a>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
-                      entry.consultation_count === 0 ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
-                    }`}>
-                      {entry.consultation_count === 0 ? "新規" : `リピーター(${entry.consultation_count}回)`}
-                    </span>
+            {waitingList.map((entry, index) => {
+              const isCalling = entry.status === "calling"
+              return (
+                <div key={entry.id} className={`bg-white border rounded-xl px-4 py-3 flex items-center gap-3 shadow-sm ${isCalling ? "border-pink-400 bg-pink-50" : ""}`}>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${isCalling ? "bg-pink-200 text-pink-700" : "bg-teal-100 text-teal-600"}`}>
+                    {index + 1}
                   </div>
-                  <p className="text-xs text-gray-400">{formatTimeAgo(entry.requested_at)}</p>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <a href={`/admin/users/${entry.user_id}`} target="_blank" rel="noopener noreferrer"
+                        className="text-sm text-blue-600 hover:underline font-medium">
+                        {entry.user_name ?? "お客様"}
+                      </a>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
+                        entry.consultation_count === 0 ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
+                      }`}>
+                        {entry.consultation_count === 0 ? "新規" : `リピーター(${entry.consultation_count}回)`}
+                      </span>
+                      {isCalling && (
+                        <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-pink-500 text-white animate-pulse">
+                          📳 着信中
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-400">{formatTimeAgo(entry.requested_at)}</p>
+                  </div>
+                  {status === "idle" && (
+                    <button onClick={() => startCallToCustomer(entry.id)}
+                      className={`text-sm px-4 py-2 rounded-lg font-bold shrink-0 text-white ${isCalling ? "bg-pink-500 hover:bg-pink-600 animate-pulse" : "bg-teal-500 hover:bg-teal-600"}`}>
+                      {isCalling ? "📞 応答する" : "📞 通話開始"}
+                    </button>
+                  )}
+                  {callingEntryId === entry.id && status === "calling" && (
+                    <span className="text-sm text-teal-600 font-bold shrink-0 animate-pulse">呼び出し中...</span>
+                  )}
                 </div>
-                {status === "idle" && (
-                  <button onClick={() => startCallToCustomer(entry.id)}
-                    className="text-sm bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-lg font-bold shrink-0">
-                    📞 通話開始
-                  </button>
-                )}
-                {callingEntryId === entry.id && status === "calling" && (
-                  <span className="text-sm text-teal-600 font-bold shrink-0 animate-pulse">呼び出し中...</span>
-                )}
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
