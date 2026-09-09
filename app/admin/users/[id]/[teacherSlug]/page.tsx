@@ -139,6 +139,7 @@ type Memo = {
 }
 
 type UserProfile = {
+  name: string
   birth_date: string
   gender: string
 }
@@ -161,7 +162,7 @@ export default function UserDetailPage() {
     id: null, memo: "", category: "", category_child: "",
     worry_status: "", marriage: "", child: "", work: "", salary: "", partner: ""
   })
-  const [profile, setProfile] = useState<UserProfile>({ birth_date: "", gender: "" })
+  const [profile, setProfile] = useState<UserProfile>({ name: "", birth_date: "", gender: "" })
   const [followMailCount, setFollowMailCount] = useState(0)
   const [followMailLastAt, setFollowMailLastAt] = useState<string | null>(null)
   const [reviewCount, setReviewCount] = useState(0)
@@ -285,11 +286,12 @@ export default function UserDetailPage() {
 
     const { data: profileData } = await supabase
       .from("user_profiles")
-      .select("birth_date, gender")
+      .select("name, birth_date, gender")
       .eq("user_id", id)
       .maybeSingle()
     if (profileData) {
       setProfile({
+        name: profileData.name ?? "",
         birth_date: profileData.birth_date ?? "",
         gender: profileData.gender ?? "",
       })
@@ -351,6 +353,7 @@ export default function UserDetailPage() {
 
     if (existing) {
       await supabase.from("user_profiles").update({
+        name: profile.name || null,
         birth_date: profile.birth_date || null,
         gender: profile.gender || null,
         updated_at: new Date().toISOString(),
@@ -358,6 +361,7 @@ export default function UserDetailPage() {
     } else {
       await supabase.from("user_profiles").insert({
         user_id: id,
+        name: profile.name || null,
         birth_date: profile.birth_date || null,
         gender: profile.gender || null,
         data_source: "google",
@@ -438,6 +442,17 @@ export default function UserDetailPage() {
                 </button>
               </div>
               <div className="space-y-2 text-sm">
+                <div>
+                  <label className="text-xs text-gray-500">名前</label>
+                  <input
+                    type="text"
+                    className={`w-full border rounded px-2 py-1 mt-1 text-xs ${canEdit ? "bg-white" : "bg-gray-100 text-gray-400 cursor-not-allowed"}`}
+                    value={profile.name}
+                    onChange={e => canEdit && setProfile({...profile, name: e.target.value})}
+                    disabled={!canEdit}
+                    placeholder="聞いた名前"
+                  />
+                </div>
                 <div>
                   <label className="text-xs text-gray-500">誕生日</label>
                   <input
