@@ -59,6 +59,7 @@ export default function CallPage() {
   const alertTimerRef = useRef<NodeJS.Timeout | null>(null)
   const teacherRef = useRef<{ id: string; name: string; channel: string } | null>(null)
   const callingEntryIdRef = useRef<string | null>(null)
+  const ignoreNextInCallEchoRef = useRef(false)
   const statusRef = useRef<"idle" | "calling" | "connected">("idle")
   const callTimeRef = useRef<number>(0)
 
@@ -234,14 +235,20 @@ export default function CallPage() {
         }
 
         if (newStatus === "in_call" && entryId === callingEntryIdRef.current && statusRef.current === "calling") {
-          stopCallRing()
-          stopAlertRing()
-          clearAlertTimer()
-          updateStatus("connected")
-          setCurrentQueueId(entryId)
-          await new Promise(resolve => setTimeout(resolve, 500))
-          await joinAgora()
-          startTimer()
+          // ★ 自分が「通話開始」した直後の書き込みエコーは1回だけ無視する
+          //    （実際にお客様が応答した時のイベントで初めて接続処理を行う）
+          if (ignoreNextInCallEchoRef.current) {
+            ignoreNextInCallEchoRef.current = false
+          } else {
+            stopCallRing()
+            stopAlertRing()
+            clearAlertTimer()
+            updateStatus("connected")
+            setCurrentQueueId(entryId)
+            await new Promise(resolve => setTimeout(resolve, 500))
+            await joinAgora()
+            startTimer()
+          }
         }
         if (newStatus === "cancelled" && entryId === callingEntryIdRef.current) {
           stopCallRing()
@@ -309,14 +316,17 @@ export default function CallPage() {
     if (!teacherRef.current) return
     stopAlertRing()
     clearAlertTimer()
+    // ★ DB書き込みより先にref/状態/無視フラグをセットしておく
+    //   （書き込み直後にエコーイベントが届いても正しく判定できるようにするため）
+    callingEntryIdRef.current = entryId
+    setCallingEntryId(entryId)
+    updateStatus("calling")
+    ignoreNextInCallEchoRef.current = true
+    playCallRing()
     // ★ ここで 'in_call' にすることで、お客様側の着信音・応答ボタンが発火する
     await supabase.from("waiting_queue")
       .update({ status: "in_call", call_started_at: new Date().toISOString() })
       .eq("id", entryId)
-    callingEntryIdRef.current = entryId
-    setCallingEntryId(entryId)
-    updateStatus("calling")
-    playCallRing()
   }
 
   const endCall = async () => {
