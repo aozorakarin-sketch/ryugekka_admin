@@ -18,6 +18,12 @@ const SLUG_TO_TEACHER_ID: Record<string, string> = {
   tsuki: "17cf0ca1-7526-466e-a644-9d3efefa4091",
 }
 
+const POINT_TEACHER_ORDER: { id: string; label: string }[] = [
+  { id: "3ba85bb9-9065-461b-b76b-cc488d4c0c3b", label: "龍トラカ" },
+  { id: "17cf0ca1-7526-466e-a644-9d3efefa4091", label: "月トラカ" },
+  { id: "cd2c4101-2e24-4ae2-8d6a-507a943904af", label: "花トラカ" },
+]
+
 const CATEGORY_OPTIONS = [
   { value: "", label: "-" },
   { value: "love", label: "恋愛" },
@@ -173,6 +179,7 @@ export default function UserDetailPage() {
 
   const [myTeacherId, setMyTeacherId] = useState<string | null>(null)
   const [userPoints, setUserPoints] = useState<{ teacher_id: string; points: number }[]>([])
+  const [commonPoints, setCommonPoints] = useState(0)
   const [hasApiKey, setHasApiKey] = useState(false)
   const [hasGeminiKey, setHasGeminiKey] = useState(false)
   const [selectedConsultation, setSelectedConsultation] = useState<Consultation | null>(null)
@@ -303,6 +310,13 @@ export default function UserDetailPage() {
       .eq("user_id", id)
     setUserPoints(pointsData ?? [])
 
+    const { data: commonPointsData } = await supabase
+      .from("user_common_points")
+      .select("points")
+      .eq("user_id", id)
+      .maybeSingle()
+    setCommonPoints(commonPointsData?.points ?? 0)
+
     setLoading(false)
   }
 
@@ -418,15 +432,21 @@ export default function UserDetailPage() {
             </div>
 
             <div className="bg-green-50 rounded p-3">
-              <div className="font-medium text-green-800 mb-2">保有ポイント</div>
+              <div className="font-medium text-green-800 mb-2">保有トラカ</div>
               <div className="space-y-1 text-gray-700">
-                {userPoints.length === 0 && <div className="text-xs text-gray-400">ポイントなし</div>}
-                {userPoints.map(up => (
-                  <div key={up.teacher_id} className="flex justify-between">
-                    <span className="text-xs">{TEACHER_MAP[up.teacher_id] ?? up.teacher_id}</span>
-                    <span className="font-bold text-green-700">{up.points.toLocaleString()}pt</span>
-                  </div>
-                ))}
+                <div className="flex justify-between">
+                  <span className="text-xs">共通トラカ</span>
+                  <span className="font-bold text-green-700">{commonPoints.toLocaleString()}pt</span>
+                </div>
+                {POINT_TEACHER_ORDER.map(t => {
+                  const pt = userPoints.find(up => up.teacher_id === t.id)?.points ?? 0
+                  return (
+                    <div key={t.id} className="flex justify-between">
+                      <span className="text-xs">{t.label}</span>
+                      <span className="font-bold text-green-700">{pt.toLocaleString()}pt</span>
+                    </div>
+                  )
+                })}
               </div>
             </div>
 
