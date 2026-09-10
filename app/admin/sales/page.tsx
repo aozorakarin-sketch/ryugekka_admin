@@ -18,12 +18,27 @@ interface SalesResponse {
   teachers: TeacherStat[]
 }
 
+interface MonthBucket {
+  month: string
+  totalRevenueJpy: number
+  totalPointsUsed: number
+  teachers: TeacherStat[]
+}
+
+interface MonthlyResponse {
+  year: number
+  months: MonthBucket[]
+}
+
 const TEACHER_TABS: { id: string; label: string }[] = [
   { id: 'all', label: '全員' },
   { id: 'cd2c4101-2e24-4ae2-8d6a-507a943904af', label: '青空花林' },
   { id: '17cf0ca1-7526-466e-a644-9d3efefa4091', label: '椎名架月' },
   { id: '3ba85bb9-9065-461b-b76b-cc488d4c0c3b', label: '雲龍蓮' },
 ]
+
+const CURRENT_YEAR = new Date().getFullYear()
+const YEAR_OPTIONS = [CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2]
 
 function toDateInputValue(d: Date) {
   return d.toISOString().slice(0, 10)
@@ -41,6 +56,32 @@ export default function SalesDashboardPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>('all')
+
+  const [viewMode, setViewMode] = useState<'period' | 'monthly'>('period')
+  const [selectedYear, setSelectedYear] = useState<number>(CURRENT_YEAR)
+  const [monthlyData, setMonthlyData] = useState<MonthlyResponse | null>(null)
+  const [monthlyLoading, setMonthlyLoading] = useState(false)
+  const [monthlyError, setMonthlyError] = useState<string | null>(null)
+
+  const fetchMonthly = useCallback(async () => {
+    setMonthlyLoading(true)
+    setMonthlyError(null)
+    try {
+      const res = await fetch(`/api/admin/sales/monthly?year=${selectedYear}`)
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? '取得に失敗しました')
+      setMonthlyData(json)
+    } catch (err: any) {
+      setMonthlyError(err.message)
+    } finally {
+      setMonthlyLoading(false)
+    }
+  }, [selectedYear])
+
+  useEffect(() => {
+    if (viewMode === 'monthly') fetchMonthly()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewMode, selectedYear])
 
   const fetchSales = useCallback(async () => {
     setLoading(true)
@@ -84,11 +125,55 @@ export default function SalesDashboardPage() {
   const filteredTotalRevenueJpy = filteredTeachers.reduce((sum, t) => sum + t.revenueJpy, 0)
   const filteredTotalPointsUsed = filteredTeachers.reduce((sum, t) => sum + t.pointsUsed.total, 0)
 
+  // 月別データも同じ先生選択タブでフィルタする
+  function monthStat(bucket: MonthBucket) {
+    const list = selectedTeacherId === 'all'
+      ? bucket.teachers
+      : bucket.teachers.filter(t => t.teacherId === selectedTeacherId)
+    return {
+      revenueJpy: list.reduce((sum, t) => sum + t.revenueJpy, 0),
+      pointsUsed: list.reduce((sum, t) => sum + t.pointsUsed.total, 0),
+    }
+  }
+
+  const yearTotalRevenueJpy = monthlyData
+    ? monthlyData.months.reduce((sum, m) => sum + monthStat(m).revenueJpy, 0)
+    : 0
+  const yearTotalPointsUsed = monthlyData
+    ? monthlyData.months.reduce((sum, m) => sum + monthStat(m).pointsUsed, 0)
+    : 0
+  const monthlyMaxRevenue = monthlyData
+    ? Math.max(1, ...monthlyData.months.map(m => monthStat(m).revenueJpy))
+    : 1
+
   return (
     <div style={{ padding: '24px 32px', maxWidth: 1000 }}>
       <h1 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: 20 }}>売上管理</h1>
 
+      {/* 表示モード切替 */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        {([
+          { id: 'period', label: '期間で見る' },
+          { id: 'monthly', label: '月ごとに見る' },
+        ] as const).map(m => (
+          <button
+            key={m.id}
+            onClick={() => setViewMode(m.id)}
+            style={{
+              padding: '6px 16px', borderRadius: 6,
+              border: `1px solid ${viewMode === m.id ? '#2d6a8f' : '#ccc'}`,
+              background: viewMode === m.id ? '#e8f2fa' : '#fff',
+              color: viewMode === m.id ? '#2d6a8f' : '#666',
+              fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer',
+            }}
+          >
+            {m.label}
+          </button>
+        ))}
+      </div>
+
       {/* 期間選択 */}
+      {viewMode === 'period' && (
       <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', marginBottom: 24 }}>
         <div>
           <label style={{ display: 'block', fontSize: '0.75rem', color: '#666', marginBottom: 4 }}>開始日</label>
@@ -120,6 +205,7 @@ export default function SalesDashboardPage() {
           {loading ? '集計中…' : '更新'}
         </button>
       </div>
+      )}
 
       {/* 先生選択タブ */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
@@ -140,7 +226,7 @@ export default function SalesDashboardPage() {
         ))}
       </div>
 
-      {error && (
+      {viewMode === 'period' && error && (
         <div style={{
           background: '#fff0f0', border: '1px solid #ffcccc', borderRadius: 8,
           padding: '10px 16px', marginBottom: 20, color: '#c0392b', fontSize: '0.85rem',
@@ -149,7 +235,7 @@ export default function SalesDashboardPage() {
         </div>
       )}
 
-      {data && (
+      {viewMode === 'period' && data && (
         <>
           {/* 合計サマリー（先生選択タブの結果を反映） */}
           <div style={{ display: 'flex', gap: 16, marginBottom: 24 }}>
@@ -207,6 +293,95 @@ export default function SalesDashboardPage() {
             ※決済額は今後の購入分から記録されるようになったため、それ以前の購入は集計に含まれません。<br />
             ※通話／チャット／メールの分類は取引履歴のメモ文言から判定した推定値です。
           </p>
+        </>
+      )}
+
+      {viewMode === 'monthly' && (
+        <>
+          {/* 年選択 */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+            {YEAR_OPTIONS.map(y => (
+              <button
+                key={y}
+                onClick={() => setSelectedYear(y)}
+                style={{
+                  padding: '6px 16px', borderRadius: 6,
+                  border: `1px solid ${selectedYear === y ? '#2d6a8f' : '#ccc'}`,
+                  background: selectedYear === y ? '#2d6a8f' : '#fff',
+                  color: selectedYear === y ? '#fff' : '#333',
+                  fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer',
+                }}
+              >
+                {y}年
+              </button>
+            ))}
+          </div>
+
+          {monthlyError && (
+            <div style={{
+              background: '#fff0f0', border: '1px solid #ffcccc', borderRadius: 8,
+              padding: '10px 16px', marginBottom: 20, color: '#c0392b', fontSize: '0.85rem',
+            }}>
+              {monthlyError}
+            </div>
+          )}
+
+          {monthlyLoading && <p style={{ color: '#999' }}>集計中…</p>}
+
+          {monthlyData && (
+            <>
+              {/* 年間サマリー */}
+              <div style={{ display: 'flex', gap: 16, marginBottom: 24 }}>
+                <div style={{ background: '#f0f7ff', borderRadius: 10, padding: '16px 24px', flex: 1 }}>
+                  <div style={{ fontSize: '0.75rem', color: '#666' }}>{selectedYear}年 合計 決済額</div>
+                  <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#2d6a8f' }}>{yen(yearTotalRevenueJpy)}</div>
+                </div>
+                <div style={{ background: '#f5f5f5', borderRadius: 10, padding: '16px 24px', flex: 1 }}>
+                  <div style={{ fontSize: '0.75rem', color: '#666' }}>{selectedYear}年 合計 トラカ消費</div>
+                  <div style={{ fontSize: '1.5rem', fontWeight: 700 }}>{pt(yearTotalPointsUsed)}</div>
+                </div>
+              </div>
+
+              {/* 月別テーブル（簡易バー付き） */}
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid #ddd', textAlign: 'right' }}>
+                    <th style={{ textAlign: 'left', padding: '8px 4px' }}>月</th>
+                    <th style={{ padding: '8px 4px' }}>決済額</th>
+                    <th style={{ padding: '8px 4px', width: '30%' }}></th>
+                    <th style={{ padding: '8px 4px' }}>トラカ消費</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {monthlyData.months.map(bucket => {
+                    const s = monthStat(bucket)
+                    const barWidth = Math.round((s.revenueJpy / monthlyMaxRevenue) * 100)
+                    return (
+                      <tr key={bucket.month} style={{ borderBottom: '1px solid #eee', textAlign: 'right' }}>
+                        <td style={{ textAlign: 'left', padding: '8px 4px', fontWeight: 600 }}>
+                          {parseInt(bucket.month.split('-')[1], 10)}月
+                        </td>
+                        <td style={{ padding: '8px 4px', whiteSpace: 'nowrap' }}>{yen(s.revenueJpy)}</td>
+                        <td style={{ padding: '8px 4px' }}>
+                          <div style={{ background: '#e8f2fa', borderRadius: 4, height: 10, width: '100%' }}>
+                            <div style={{
+                              background: '#2d6a8f', borderRadius: 4, height: 10,
+                              width: `${barWidth}%`, transition: 'width 0.2s',
+                            }} />
+                          </div>
+                        </td>
+                        <td style={{ padding: '8px 4px', whiteSpace: 'nowrap' }}>{pt(s.pointsUsed)}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+
+              <p style={{ fontSize: '0.75rem', color: '#999', marginTop: 16 }}>
+                ※決済額は今後の購入分から記録されるようになったため、それ以前の月は0円表示になります。
+              </p>
+            </>
+          )}
         </>
       )}
     </div>
