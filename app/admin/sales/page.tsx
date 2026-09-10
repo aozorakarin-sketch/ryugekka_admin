@@ -40,6 +40,26 @@ const TEACHER_TABS: { id: string; label: string }[] = [
 const CURRENT_YEAR = new Date().getFullYear()
 const YEAR_OPTIONS = [CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2]
 
+const RYU_TEACHER_ID = '3ba85bb9-9065-461b-b76b-cc488d4c0c3b'
+const TSUKI_TEACHER_ID = '17cf0ca1-7526-466e-a644-9d3efefa4091'
+const SHARE_RATE = 0.05 // 5%
+
+function getTeacherRevenue(bucket: MonthBucket, teacherId: string): number {
+  return bucket.teachers.find(t => t.teacherId === teacherId)?.revenueJpy ?? 0
+}
+
+// monthKey（'YYYY-MM'）の翌月・指定日を計算する
+// 例: '2026-01' + day=10 → 2026年2月10日（Dateのmonth引数が0始まりなので、
+//     monthKeyの月番号をそのまま渡すと自動的に「翌月」になる）
+function nextMonthDate(monthKey: string, day: number): Date {
+  const [y, m] = monthKey.split('-').map(Number)
+  return new Date(y, m, day)
+}
+
+function formatDate(d: Date): string {
+  return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`
+}
+
 function toDateInputValue(d: Date) {
   return d.toISOString().slice(0, 10)
 }
@@ -379,6 +399,56 @@ export default function SalesDashboardPage() {
 
               <p style={{ fontSize: '0.75rem', color: '#999', marginTop: 16 }}>
                 ※決済額は今後の購入分から記録されるようになったため、それ以前の月は0円表示になります。
+              </p>
+
+              {/* 振込精算（月末締め・決済額の5%） */}
+              <h2 style={{ fontSize: '1.1rem', fontWeight: 700, marginTop: 36, marginBottom: 4 }}>振込精算</h2>
+              <p style={{ fontSize: '0.75rem', color: '#999', marginBottom: 16 }}>
+                月末締め。雲龍蓮・架月ちゃんは決済額の5%を翌月10日までにあなたへ、
+                あなたは全員合計の決済額の5%を翌月15日までに虎へ振り込む想定の計算です。
+              </p>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid #ddd', textAlign: 'right' }}>
+                    <th style={{ textAlign: 'left', padding: '8px 4px' }}>対象月</th>
+                    <th style={{ padding: '8px 4px' }}>雲龍蓮→あなた</th>
+                    <th style={{ padding: '8px 4px' }}>架月→あなた</th>
+                    <th style={{ padding: '8px 4px' }}>期限</th>
+                    <th style={{ padding: '8px 4px' }}>あなた→虎</th>
+                    <th style={{ padding: '8px 4px' }}>期限</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {monthlyData.months.map(bucket => {
+                    const ryuTransfer = Math.round(getTeacherRevenue(bucket, RYU_TEACHER_ID) * SHARE_RATE)
+                    const tsukiTransfer = Math.round(getTeacherRevenue(bucket, TSUKI_TEACHER_ID) * SHARE_RATE)
+                    const toraTransfer = Math.round(bucket.totalRevenueJpy * SHARE_RATE)
+                    const dueToYou = formatDate(nextMonthDate(bucket.month, 10))
+                    const dueToTora = formatDate(nextMonthDate(bucket.month, 15))
+                    const isAllZero = ryuTransfer === 0 && tsukiTransfer === 0 && toraTransfer === 0
+
+                    return (
+                      <tr key={bucket.month} style={{
+                        borderBottom: '1px solid #eee', textAlign: 'right',
+                        opacity: isAllZero ? 0.4 : 1,
+                      }}>
+                        <td style={{ textAlign: 'left', padding: '8px 4px', fontWeight: 600 }}>
+                          {parseInt(bucket.month.split('-')[1], 10)}月分
+                        </td>
+                        <td style={{ padding: '8px 4px', whiteSpace: 'nowrap' }}>{yen(ryuTransfer)}</td>
+                        <td style={{ padding: '8px 4px', whiteSpace: 'nowrap' }}>{yen(tsukiTransfer)}</td>
+                        <td style={{ padding: '8px 4px', whiteSpace: 'nowrap', color: '#666', fontSize: '0.8rem' }}>{dueToYou}</td>
+                        <td style={{ padding: '8px 4px', whiteSpace: 'nowrap' }}>{yen(toraTransfer)}</td>
+                        <td style={{ padding: '8px 4px', whiteSpace: 'nowrap', color: '#666', fontSize: '0.8rem' }}>{dueToTora}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+
+              <p style={{ fontSize: '0.75rem', color: '#999', marginTop: 12 }}>
+                ※「あなた→虎」は雲龍蓮・架月・花林の合計決済額（あなた自身の分も含む）の5%です。<br />
+                ※振込先口座はこの画面では管理していません（別途、雲龍蓮・架月ちゃんへお伝えしているものをご利用ください）。
               </p>
             </>
           )}
