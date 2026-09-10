@@ -45,6 +45,8 @@ export default function CallPage() {
   const [currentQueueId, setCurrentQueueId] = useState<string | null>(null)
   const [callingEntryId, setCallingEntryId] = useState<string | null>(null)
   const [toasts, setToasts] = useState<{ message: string; type: 'normal' | 'warning' }[]>([])
+  const [pausedUntil, setPausedUntil] = useState<string | null>(null)
+  const [nowTick, setNowTick] = useState(Date.now())
 
   const clientRef = useRef<any>(null)
   const localTrackRef = useRef<any>(null)
@@ -74,6 +76,11 @@ export default function CallPage() {
     }
   }, [])
 
+  useEffect(() => {
+    const t = setInterval(() => setNowTick(Date.now()), 30000)
+    return () => clearInterval(t)
+  }, [])
+
   const updateStatus = (s: "idle" | "calling" | "connected") => {
     setStatus(s)
     statusRef.current = s
@@ -89,6 +96,9 @@ export default function CallPage() {
       fetchRecordings(t.id)
       fetchWaitingList(t.id)
       subscribeWaitingQueue(t.id)
+      const { data: teacherRow } = await supabase
+        .from("teachers").select("paused_until").eq("id", t.id).single()
+      setPausedUntil(teacherRow?.paused_until ?? null)
     }
   }
 
@@ -480,6 +490,22 @@ export default function CallPage() {
     if (localTrackRef.current) { localTrackRef.current.setEnabled(muted); setMuted(!muted) }
   }
 
+  const startPause = async (minutes: number) => {
+    if (!teacherRef.current) return
+    const until = new Date(Date.now() + minutes * 60 * 1000).toISOString()
+    await supabase.from("teachers").update({ paused_until: until }).eq("id", teacherRef.current.id)
+    setPausedUntil(until)
+  }
+
+  const endPauseEarly = async () => {
+    if (!teacherRef.current) return
+    await supabase.from("teachers").update({ paused_until: null }).eq("id", teacherRef.current.id)
+    setPausedUntil(null)
+  }
+
+  const isPaused = !!pausedUntil && new Date(pausedUntil).getTime() > nowTick
+  const pauseRemainingMin = isPaused ? Math.max(1, Math.ceil((new Date(pausedUntil!).getTime() - nowTick) / 60000)) : 0
+
   return (
     <div className="p-4 max-w-2xl relative">
       <div style={{ position: "fixed", top: 20, right: 20, zIndex: 9999, display: "flex", flexDirection: "column", gap: 8 }}>
@@ -498,6 +524,26 @@ export default function CallPage() {
       {waitingCount > 0 && (
         <div className="mb-4 px-4 py-2 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">
           現在 <span className="font-bold">{waitingCount}人</span> が待機中です
+        </div>
+      )}
+
+      {isPaused ? (
+        <div className="mb-4 px-4 py-3 bg-orange-50 border border-orange-200 rounded-xl flex items-center justify-between">
+          <span className="text-sm text-orange-700 font-bold">☕ 休憩中（あと{pauseRemainingMin}分）</span>
+          <button onClick={endPauseEarly}
+            className="text-xs bg-white border border-orange-300 text-orange-600 px-3 py-1.5 rounded-lg font-bold hover:bg-orange-100">
+            休憩を終える
+          </button>
+        </div>
+      ) : status === "idle" && (
+        <div className="mb-4 flex items-center gap-2">
+          <span className="text-xs text-gray-400">☕ 休憩する:</span>
+          {[15, 20, 30].map(min => (
+            <button key={min} onClick={() => startPause(min)}
+              className="text-xs bg-gray-100 hover:bg-orange-100 text-gray-600 hover:text-orange-700 px-3 py-1.5 rounded-lg font-medium">
+              {min}分
+            </button>
+          ))}
         </div>
       )}
 
@@ -558,11 +604,14 @@ export default function CallPage() {
                     </div>
                     <p className="text-xs text-gray-400">{formatTimeAgo(entry.requested_at)}</p>
                   </div>
-                  {status === "idle" && (
+                  {status === "idle" && !isPaused && (
                     <button onClick={() => startCallToCustomer(entry.id)}
                       className={`text-sm px-4 py-2 rounded-lg font-bold shrink-0 text-white ${isCalling ? "bg-pink-500 hover:bg-pink-600 animate-pulse" : "bg-teal-500 hover:bg-teal-600"}`}>
                       {isCalling ? "📞 応答する" : "📞 通話開始"}
                     </button>
+                  )}
+                  {status === "idle" && isPaused && (
+                    <span className="text-xs text-gray-400 shrink-0">☕ 休憩中</span>
                   )}
                   {callingEntryId === entry.id && status === "calling" && (
                     <span className="text-sm text-teal-600 font-bold shrink-0 animate-pulse">呼び出し中...</span>
