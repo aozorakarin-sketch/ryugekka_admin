@@ -137,34 +137,32 @@ export default function SalesDashboardPage() {
   const pt = (n: number) => `${n.toLocaleString()}トラカ`
 
   // 選択中の先生でフィルタ（'all'なら全員）
-  const filteredTeachers = data
+  const filteredTeachers = Array.isArray(data?.teachers)
     ? selectedTeacherId === 'all'
-      ? data.teachers
-      : data.teachers.filter(t => t.teacherId === selectedTeacherId)
+      ? data!.teachers
+      : data!.teachers.filter(t => t.teacherId === selectedTeacherId)
     : []
   const filteredTotalRevenueJpy = filteredTeachers.reduce((sum, t) => sum + t.revenueJpy, 0)
   const filteredTotalPointsUsed = filteredTeachers.reduce((sum, t) => sum + t.pointsUsed.total, 0)
 
   // 月別データも同じ先生選択タブでフィルタする
+  // ※ APIのレスポンス形が想定と異なっていても画面ごと落ちないよう、防御的にデフォルト値を用意する
   function monthStat(bucket: MonthBucket) {
+    const teachers = Array.isArray(bucket?.teachers) ? bucket.teachers : []
     const list = selectedTeacherId === 'all'
-      ? bucket.teachers
-      : bucket.teachers.filter(t => t.teacherId === selectedTeacherId)
+      ? teachers
+      : teachers.filter(t => t.teacherId === selectedTeacherId)
     return {
-      revenueJpy: list.reduce((sum, t) => sum + t.revenueJpy, 0),
-      pointsUsed: list.reduce((sum, t) => sum + t.pointsUsed.total, 0),
+      revenueJpy: list.reduce((sum, t) => sum + (t.revenueJpy ?? 0), 0),
+      pointsUsed: list.reduce((sum, t) => sum + (t.pointsUsed?.total ?? 0), 0),
     }
   }
 
-  const yearTotalRevenueJpy = monthlyData
-    ? monthlyData.months.reduce((sum, m) => sum + monthStat(m).revenueJpy, 0)
-    : 0
-  const yearTotalPointsUsed = monthlyData
-    ? monthlyData.months.reduce((sum, m) => sum + monthStat(m).pointsUsed, 0)
-    : 0
-  const monthlyMaxRevenue = monthlyData
-    ? Math.max(1, ...monthlyData.months.map(m => monthStat(m).revenueJpy))
-    : 1
+  const monthlyMonths = Array.isArray(monthlyData?.months) ? monthlyData!.months : []
+
+  const yearTotalRevenueJpy = monthlyMonths.reduce((sum, m) => sum + monthStat(m).revenueJpy, 0)
+  const yearTotalPointsUsed = monthlyMonths.reduce((sum, m) => sum + monthStat(m).pointsUsed, 0)
+  const monthlyMaxRevenue = Math.max(1, ...monthlyMonths.map(m => monthStat(m).revenueJpy))
 
   return (
     <div style={{ padding: '24px 32px', maxWidth: 1000 }}>
@@ -348,7 +346,7 @@ export default function SalesDashboardPage() {
 
           {monthlyLoading && <p style={{ color: '#999' }}>集計中…</p>}
 
-          {monthlyData && (
+          {monthlyData && Array.isArray(monthlyData.months) && (
             <>
               {/* 年間サマリー */}
               <div style={{ display: 'flex', gap: 16, marginBottom: 24 }}>
@@ -373,7 +371,7 @@ export default function SalesDashboardPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {monthlyData.months.map(bucket => {
+                  {monthlyMonths.map(bucket => {
                     const s = monthStat(bucket)
                     const barWidth = Math.round((s.revenueJpy / monthlyMaxRevenue) * 100)
                     return (
@@ -419,7 +417,7 @@ export default function SalesDashboardPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {monthlyData.months.map(bucket => {
+                  {monthlyMonths.map(bucket => {
                     const ryuTransfer = Math.round(getTeacherRevenue(bucket, RYU_TEACHER_ID) * SHARE_RATE)
                     const tsukiTransfer = Math.round(getTeacherRevenue(bucket, TSUKI_TEACHER_ID) * SHARE_RATE)
                     const toraTransfer = Math.round(bucket.totalRevenueJpy * SHARE_RATE)
