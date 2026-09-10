@@ -18,6 +18,13 @@ interface SalesResponse {
   teachers: TeacherStat[]
 }
 
+const TEACHER_TABS: { id: string; label: string }[] = [
+  { id: 'all', label: '全員' },
+  { id: 'cd2c4101-2e24-4ae2-8d6a-507a943904af', label: '青空花林' },
+  { id: '17cf0ca1-7526-466e-a644-9d3efefa4091', label: '椎名架月' },
+  { id: '3ba85bb9-9065-461b-b76b-cc488d4c0c3b', label: '雲龍蓮' },
+]
+
 function toDateInputValue(d: Date) {
   return d.toISOString().slice(0, 10)
 }
@@ -33,6 +40,7 @@ export default function SalesDashboardPage() {
   const [data, setData] = useState<SalesResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [selectedTeacherId, setSelectedTeacherId] = useState<string>('all')
 
   const fetchSales = useCallback(async () => {
     setLoading(true)
@@ -66,6 +74,15 @@ export default function SalesDashboardPage() {
 
   const yen = (n: number) => `¥${n.toLocaleString()}`
   const pt = (n: number) => `${n.toLocaleString()}トラカ`
+
+  // 選択中の先生でフィルタ（'all'なら全員）
+  const filteredTeachers = data
+    ? selectedTeacherId === 'all'
+      ? data.teachers
+      : data.teachers.filter(t => t.teacherId === selectedTeacherId)
+    : []
+  const filteredTotalRevenueJpy = filteredTeachers.reduce((sum, t) => sum + t.revenueJpy, 0)
+  const filteredTotalPointsUsed = filteredTeachers.reduce((sum, t) => sum + t.pointsUsed.total, 0)
 
   return (
     <div style={{ padding: '24px 32px', maxWidth: 1000 }}>
@@ -104,6 +121,25 @@ export default function SalesDashboardPage() {
         </button>
       </div>
 
+      {/* 先生選択タブ */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+        {TEACHER_TABS.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setSelectedTeacherId(tab.id)}
+            style={{
+              padding: '6px 18px', borderRadius: 20,
+              border: `1px solid ${selectedTeacherId === tab.id ? '#2d6a8f' : '#ccc'}`,
+              background: selectedTeacherId === tab.id ? '#2d6a8f' : '#fff',
+              color: selectedTeacherId === tab.id ? '#fff' : '#333',
+              fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer',
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       {error && (
         <div style={{
           background: '#fff0f0', border: '1px solid #ffcccc', borderRadius: 8,
@@ -115,15 +151,15 @@ export default function SalesDashboardPage() {
 
       {data && (
         <>
-          {/* 合計サマリー */}
+          {/* 合計サマリー（先生選択タブの結果を反映） */}
           <div style={{ display: 'flex', gap: 16, marginBottom: 24 }}>
             <div style={{ background: '#f0f7ff', borderRadius: 10, padding: '16px 24px', flex: 1 }}>
               <div style={{ fontSize: '0.75rem', color: '#666' }}>期間合計 決済額</div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#2d6a8f' }}>{yen(data.totalRevenueJpy)}</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#2d6a8f' }}>{yen(filteredTotalRevenueJpy)}</div>
             </div>
             <div style={{ background: '#f5f5f5', borderRadius: 10, padding: '16px 24px', flex: 1 }}>
               <div style={{ fontSize: '0.75rem', color: '#666' }}>期間合計 トラカ消費</div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 700 }}>{pt(data.totalPointsUsed)}</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 700 }}>{pt(filteredTotalPointsUsed)}</div>
             </div>
           </div>
 
@@ -142,7 +178,7 @@ export default function SalesDashboardPage() {
               </tr>
             </thead>
             <tbody>
-              {data.teachers.map(t => (
+              {filteredTeachers.map(t => (
                 <tr key={t.teacherId} style={{ borderBottom: '1px solid #eee', textAlign: 'right' }}>
                   <td style={{ textAlign: 'left', padding: '10px 4px', fontWeight: 600 }}>{t.teacherName}</td>
                   <td style={{ padding: '10px 4px' }}>
@@ -161,7 +197,7 @@ export default function SalesDashboardPage() {
                   <td style={{ padding: '10px 4px', fontWeight: 700 }}>{pt(t.pointsUsed.total)}</td>
                 </tr>
               ))}
-              {data.teachers.length === 0 && (
+              {filteredTeachers.length === 0 && (
                 <tr><td colSpan={8} style={{ padding: 20, textAlign: 'center', color: '#999' }}>この期間のデータはありません</td></tr>
               )}
             </tbody>
