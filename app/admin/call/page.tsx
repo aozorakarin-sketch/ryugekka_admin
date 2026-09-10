@@ -21,6 +21,7 @@ type WaitingEntry = {
   agora_channel: string
   user_name: string | null
   consultation_count: number
+  referral_source: string | null
 }
 
 type Recording = {
@@ -295,12 +296,15 @@ export default function CallPage() {
     if (!data) { setWaitingList([]); setWaitingCount(0); return }
 
     // ★ user_nameはテーブルに直接入ってるのでそちらを優先、なければusersテーブルから取得
+    //   referral_sourceは常にusersテーブルから取得（令和の虎バッジ表示用）
     const enriched = await Promise.all(data.map(async (entry) => {
       let displayName = entry.user_name ?? null
-      if (!displayName && entry.user_id) {
+      let referralSource: string | null = null
+      if (entry.user_id) {
         const { data: userData } = await supabase
-          .from("users").select("handle_name").eq("id", entry.user_id).single()
-        displayName = userData?.handle_name ?? null
+          .from("users").select("handle_name, referral_source").eq("id", entry.user_id).single()
+        if (!displayName) displayName = userData?.handle_name ?? null
+        referralSource = userData?.referral_source ?? null
       }
       const { count } = await supabase
         .from("consultations").select("*", { count: "exact", head: true })
@@ -309,6 +313,7 @@ export default function CallPage() {
         ...entry,
         user_name: displayName,
         consultation_count: count ?? 0,
+        referral_source: referralSource,
       }
     }))
 
@@ -596,6 +601,11 @@ export default function CallPage() {
                       }`}>
                         {entry.consultation_count === 0 ? "新規" : `リピーター(${entry.consultation_count}回)`}
                       </span>
+                      {entry.referral_source === "tora" && (
+                        <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-orange-500 text-white">
+                          🐯 令和の虎
+                        </span>
+                      )}
                       {isCalling && (
                         <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-pink-500 text-white animate-pulse">
                           📳 着信中

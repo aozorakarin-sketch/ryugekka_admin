@@ -163,6 +163,7 @@ export default function UserDetailPage() {
   const pageTeacherId = SLUG_TO_TEACHER_ID[teacherSlug] ?? null
 
   const [handleName, setHandleName] = useState("")
+  const [referralSource, setReferralSource] = useState<string | null>(null)
   const [consultations, setConsultations] = useState<Consultation[]>([])
   const [memo, setMemo] = useState<Memo>({
     id: null, memo: "", category: "", category_child: "",
@@ -206,10 +207,11 @@ export default function UserDetailPage() {
 
     const { data: userData } = await supabase
       .from("users")
-      .select("handle_name")
+      .select("handle_name, referral_source")
       .eq("id", id)
       .single()
     setHandleName(userData?.handle_name ?? "-")
+    setReferralSource(userData?.referral_source ?? null)
 
     const { data: teachersData } = await supabase
       .from("teachers")
@@ -409,6 +411,11 @@ export default function UserDetailPage() {
       <div className="w-64 shrink-0">
         <div className="border rounded-lg p-4 bg-white">
           <h2 className="font-bold text-lg mb-1">{handleName}</h2>
+          {referralSource === "tora" && (
+            <span className="inline-block text-xs px-2 py-0.5 rounded-full font-bold bg-orange-500 text-white mb-1">
+              🐯 令和の虎
+            </span>
+          )}
           <div className="text-xs text-gray-500 mb-1">{pageTeacherName}の担当</div>
           <a href={`/admin/users/${id}`} className="text-xs text-gray-400 hover:underline">← 先生一覧に戻る</a>
 
