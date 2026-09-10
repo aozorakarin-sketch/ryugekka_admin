@@ -411,17 +411,17 @@ export default function SalesDashboardPage() {
               {/* 振込精算（月末締め・決済額の5%） */}
               <h2 style={{ fontSize: '1.1rem', fontWeight: 700, marginTop: 36, marginBottom: 4 }}>振込精算</h2>
               <p style={{ fontSize: '0.75rem', color: '#999', marginBottom: 16 }}>
-                月末締め。雲龍蓮・架月ちゃんは決済額の5%を翌月10日までにあなたへ、
-                あなたは全員合計の決済額の5%を翌月15日までに虎へ振り込む想定の計算です。
+                月末締め。雲龍蓮・架月ちゃんは決済額の5%を翌月10日までに青空花林へ、
+                青空花林は全員合計の決済額の5%を翌月15日までに虎へ振り込む想定の計算です。
               </p>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                 <thead>
                   <tr style={{ borderBottom: '2px solid #ddd', textAlign: 'right' }}>
                     <th style={{ textAlign: 'left', padding: '8px 4px' }}>対象月</th>
-                    <th style={{ padding: '8px 4px' }}>雲龍蓮→あなた</th>
-                    <th style={{ padding: '8px 4px' }}>架月→あなた</th>
+                    <th style={{ padding: '8px 4px' }}>雲龍蓮→青空花林</th>
+                    <th style={{ padding: '8px 4px' }}>架月→青空花林</th>
                     <th style={{ padding: '8px 4px' }}>期限</th>
-                    <th style={{ padding: '8px 4px' }}>あなた→虎</th>
+                    <th style={{ padding: '8px 4px' }}>青空花林→虎</th>
                     <th style={{ padding: '8px 4px' }}>期限</th>
                   </tr>
                 </thead>
@@ -454,7 +454,7 @@ export default function SalesDashboardPage() {
               </table>
 
               <p style={{ fontSize: '0.75rem', color: '#999', marginTop: 12 }}>
-                ※「あなた→虎」は雲龍蓮・架月・花林の合計決済額（あなた自身の分も含む）の5%です。<br />
+                ※「青空花林→虎」は雲龍蓮・架月・花林の合計決済額（青空花林自身の分も含む）の5%です。<br />
                 ※振込先口座はこの画面では管理していません（別途、雲龍蓮・架月ちゃんへお伝えしているものをご利用ください）。
               </p>
             </>
