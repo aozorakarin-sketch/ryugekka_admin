@@ -346,6 +346,15 @@ export default function SalesDashboardPage() {
 
           {monthlyLoading && <p style={{ color: '#999' }}>集計中…</p>}
 
+          {monthlyData && !Array.isArray(monthlyData.months) && (
+            <div style={{
+              background: '#fff8e0', border: '1px solid #f0d080', borderRadius: 8,
+              padding: '10px 16px', marginBottom: 20, color: '#8a6d1e', fontSize: '0.85rem',
+            }}>
+              集計データの形式が想定と異なります（デバッグ用: {JSON.stringify(monthlyData).slice(0, 200)}）
+            </div>
+          )}
+
           {monthlyData && Array.isArray(monthlyData.months) && (
             <>
               {/* 年間サマリー */}
