@@ -313,13 +313,19 @@ export default function DashboardPage() {
         {teacherName ? `ようこそ！${teacherName}先生！龍月花管理画面へ！` : "ようこそ、龍月花管理画面へ！"}
       </p>
       {monthSummary && (
-        <p className="text-sm text-gray-500 mb-6">
-          {new Date().getMonth() + 1}月の消費トラカ：
-          <span className="font-medium text-gray-700">{monthSummary.consumed_points.toLocaleString()}トラカ</span>
-          <span className="text-xs text-gray-400 ml-1">
-            （電話{monthSummary.consumed_points_call.toLocaleString()} / メール{monthSummary.consumed_points_mail.toLocaleString()} / チャット{monthSummary.consumed_points_chat.toLocaleString()}）
-          </span>
-        </p>
+        <div className="text-sm text-gray-500 mb-6 space-y-1">
+          <p>
+            {new Date().getMonth() + 1}月のトラカ売上：
+            <span className="font-medium text-gray-700">{monthSummary.revenue_jpy.toLocaleString()}円</span>
+          </p>
+          <p>
+            {new Date().getMonth() + 1}月の消費トラカ：
+            <span className="font-medium text-gray-700">{monthSummary.consumed_points.toLocaleString()}トラカ</span>
+            <span className="text-xs text-gray-400 ml-1">
+              （電話{monthSummary.consumed_points_call.toLocaleString()} / メール{monthSummary.consumed_points_mail.toLocaleString()} / チャット{monthSummary.consumed_points_chat.toLocaleString()}）
+            </span>
+          </p>
+        </div>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl">
