@@ -49,6 +49,24 @@ type Birthday = {
   daysUntil: number
 }
 
+type UnrepliedReview = {
+  id: string
+  user_id: string
+  handle_name: string
+  satisfaction: number | null
+  comment: string | null
+  created_at: string
+}
+
+type YesterdaySummary = {
+  consultation_count: number
+  chat_count: number
+  total_call_minutes: number
+  avg_call_minutes: number
+  consumed_points: number
+  revenue_jpy: number
+}
+
 export default function DashboardPage() {
   const router = useRouter()
   const [myUserId, setMyUserId] = useState<string | null>(null)
@@ -68,15 +86,22 @@ export default function DashboardPage() {
   const [birthdays, setBirthdays] = useState<Birthday[]>([])
   const [loadingBirthdays, setLoadingBirthdays] = useState(true)
 
+  const [unrepliedReviews, setUnrepliedReviews] = useState<UnrepliedReview[]>([])
+  const [unrepliedReviewCount, setUnrepliedReviewCount] = useState(0)
+  const [loadingReviews, setLoadingReviews] = useState(true)
+
+  const [yesterdaySummary, setYesterdaySummary] = useState<YesterdaySummary | null>(null)
+  const [loadingSummary, setLoadingSummary] = useState(true)
+
   useEffect(() => {
     init()
   }, [])
 
   const init = async () => {
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user?.email) { setLoadingReplies(false); setLoadingAnnouncements(false); setLoadingNews(false); setLoadingBirthdays(false); return }
+    if (!user?.email) { setLoadingReplies(false); setLoadingAnnouncements(false); setLoadingNews(false); setLoadingBirthdays(false); setLoadingReviews(false); setLoadingSummary(false); return }
     const t = EMAIL_TO_TEACHER[user.email]
-    if (!t) { setLoadingReplies(false); setLoadingAnnouncements(false); setLoadingNews(false); setLoadingBirthdays(false); return }
+    if (!t) { setLoadingReplies(false); setLoadingAnnouncements(false); setLoadingNews(false); setLoadingBirthdays(false); setLoadingReviews(false); setLoadingSummary(false); return }
     setMyUserId(user.id)
     setTeacherId(t.id)
 
@@ -85,6 +110,8 @@ export default function DashboardPage() {
       fetchAnnouncements(t.id),
       fetchNews(),
       fetchBirthdays(t.id),
+      fetchUnrepliedReviews(t.id),
+      fetchYesterdaySummary(t.id),
     ])
   }
 
@@ -205,6 +232,45 @@ export default function DashboardPage() {
     mapped.sort((a, b) => a.daysUntil - b.daysUntil)
     setBirthdays(mapped.slice(0, 20))
     setLoadingBirthdays(false)
+  }
+
+  const fetchUnrepliedReviews = async (myTeacherId: string) => {
+    const { count } = await supabase
+      .from("reviews")
+      .select("*", { count: "exact", head: true })
+      .eq("teacher_id", myTeacherId)
+      .eq("is_replied", false)
+
+    setUnrepliedReviewCount(count ?? 0)
+
+    const { data } = await supabase
+      .from("reviews")
+      .select("id, user_id, satisfaction, comment, created_at, users(handle_name)")
+      .eq("teacher_id", myTeacherId)
+      .eq("is_replied", false)
+      .order("created_at", { ascending: false })
+      .limit(20)
+
+    const mapped: UnrepliedReview[] = (data ?? []).map((r: any) => ({
+      id: r.id,
+      user_id: r.user_id,
+      handle_name: r.users?.handle_name ?? "-",
+      satisfaction: r.satisfaction,
+      comment: r.comment,
+      created_at: r.created_at,
+    }))
+    setUnrepliedReviews(mapped)
+    setLoadingReviews(false)
+  }
+
+  const fetchYesterdaySummary = async (myTeacherId: string) => {
+    const { data, error } = await supabase
+      .rpc("get_yesterday_summary", { p_teacher_id: myTeacherId })
+      .single()
+    if (!error && data) {
+      setYesterdaySummary(data as YesterdaySummary)
+    }
+    setLoadingSummary(false)
   }
 
   const formatDate = (s: string | null) => {
@@ -357,6 +423,51 @@ export default function DashboardPage() {
           )}
         </div>
 
+        {/* ユーザーレビュー */}
+        <div className="border rounded-lg bg-white overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b">
+            <h2 className="font-bold text-sm">ユーザーレビュー</h2>
+            {unrepliedReviewCount > 0 && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-bold">
+                未返信 {unrepliedReviewCount}件
+              </span>
+            )}
+          </div>
+
+          {loadingReviews ? (
+            <div className="p-4 text-sm text-gray-400">読み込み中...</div>
+          ) : unrepliedReviews.length === 0 ? (
+            <div className="p-4 text-sm text-gray-400">未返信のレビューはありません</div>
+          ) : (
+            <div className="divide-y max-h-56 overflow-y-auto">
+              {unrepliedReviews.map(r => (
+                <div
+                  key={r.id}
+                  className="flex items-center justify-between px-4 py-2.5 cursor-pointer hover:bg-gray-50"
+                  onClick={() => router.push(`/admin/reviews`)}
+                >
+                  <div className="min-w-0 flex items-center gap-2">
+                    {r.satisfaction != null && (
+                      <span className="text-xs text-amber-500 flex-shrink-0">★{r.satisfaction}</span>
+                    )}
+                    <p className="text-sm truncate">{r.handle_name}：{r.comment}</p>
+                  </div>
+                  <span className="text-xs text-gray-400 flex-shrink-0 ml-3">{formatDate(r.created_at)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="px-4 py-2 border-t">
+            <button
+              onClick={() => router.push(`/admin/reviews`)}
+              className="text-sm text-teal-600 hover:text-teal-700"
+            >
+              一覧へ →
+            </button>
+          </div>
+        </div>
+
         {/* フォローメールへの返信 */}
         <div className="border rounded-lg bg-white overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b">
@@ -387,6 +498,48 @@ export default function DashboardPage() {
                   <span className="text-xs text-gray-400 flex-shrink-0 ml-3">{formatDate(r.user_replied_at)}</span>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+
+        {/* 前日成果 */}
+        <div className="border rounded-lg bg-white overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b">
+            <h2 className="font-bold text-sm">前日成果</h2>
+          </div>
+
+          {loadingSummary ? (
+            <div className="p-4 text-sm text-gray-400">読み込み中...</div>
+          ) : !yesterdaySummary ? (
+            <div className="p-4 text-sm text-gray-400">取得できませんでした</div>
+          ) : (
+            <div className="divide-y">
+              <div className="flex items-center justify-between px-4 py-2.5">
+                <span className="text-sm text-gray-600">鑑定回数</span>
+                <span className="text-sm font-medium">
+                  {yesterdaySummary.consultation_count + yesterdaySummary.chat_count} 回
+                  <span className="text-xs text-gray-400 ml-1">
+                    （通話・メール{yesterdaySummary.consultation_count} / チャット{yesterdaySummary.chat_count}）
+                  </span>
+                </span>
+              </div>
+              <div className="flex items-center justify-between px-4 py-2.5">
+                <span className="text-sm text-gray-600">消費トラカ</span>
+                <span className="text-sm font-medium">{yesterdaySummary.consumed_points.toLocaleString()} トラカ</span>
+              </div>
+              <div className="flex items-center justify-between px-4 py-2.5">
+                <span className="text-sm text-gray-600">売上金額</span>
+                <span className="text-sm font-medium">{yesterdaySummary.revenue_jpy.toLocaleString()} 円</span>
+              </div>
+              <div className="flex items-center justify-between px-4 py-2.5">
+                <span className="text-sm text-gray-600">通話分数</span>
+                <span className="text-sm font-medium">
+                  合計{yesterdaySummary.total_call_minutes}分
+                  <span className="text-xs text-gray-400 ml-1">
+                    （平均{Math.round(yesterdaySummary.avg_call_minutes)}分）
+                  </span>
+                </span>
+              </div>
             </div>
           )}
         </div>
