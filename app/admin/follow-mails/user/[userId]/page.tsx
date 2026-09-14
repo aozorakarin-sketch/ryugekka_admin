@@ -32,6 +32,7 @@ type FollowMail = {
   user_reply: string | null
   user_replied_at: string | null
   is_user_replied: boolean
+  is_reply_read: boolean
 }
 
 export default function UserFollowMailsPage() {
@@ -72,7 +73,7 @@ export default function UserFollowMailsPage() {
 
     const { data: mailData } = await supabase
       .from("follow_mails")
-      .select("id, subject, content, sent_at, is_draft, user_reply, user_replied_at, is_user_replied")
+      .select("id, subject, content, sent_at, is_draft, user_reply, user_replied_at, is_user_replied, is_reply_read")
       .eq("user_id", userId)
       .eq("teacher_id", teacherId)
       .order("sent_at", { ascending: false })
@@ -84,6 +85,16 @@ export default function UserFollowMailsPage() {
     if (!s) return "-"
     const d = new Date(s)
     return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`
+  }
+
+  // メールを開いたとき、未読の返信があれば既読にする
+  const handleToggle = async (m: FollowMail) => {
+    const nextOpen = openId === m.id ? null : m.id
+    setOpenId(nextOpen)
+    if (nextOpen && m.is_user_replied && !m.is_reply_read) {
+      await supabase.from("follow_mails").update({ is_reply_read: true }).eq("id", m.id)
+      setMails(prev => prev.map(x => x.id === m.id ? { ...x, is_reply_read: true } : x))
+    }
   }
 
   // ログイン先生が表示中の先生と同じなら編集可
@@ -132,15 +143,15 @@ export default function UserFollowMailsPage() {
           <div key={m.id} className="border rounded-lg bg-white overflow-hidden">
             <div
               className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-gray-50"
-              onClick={() => setOpenId(openId === m.id ? null : m.id)}
+              onClick={() => handleToggle(m)}
             >
               <div className="flex items-center gap-3">
                 <span className={`text-xs px-2 py-0.5 rounded-full ${m.is_draft ? "bg-gray-100 text-gray-600" : "bg-green-100 text-green-700"}`}>
                   {m.is_draft ? "下書き" : "送信済"}
                 </span>
                 {m.is_user_replied && (
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-pink-100 text-pink-700">
-                    返信あり
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${m.is_reply_read ? "bg-pink-100 text-pink-700" : "bg-red-100 text-red-700 font-bold"}`}>
+                    {m.is_reply_read ? "返信あり" : "返信あり（未読）"}
                   </span>
                 )}
                 <span className="text-sm font-medium">{m.subject}</span>
