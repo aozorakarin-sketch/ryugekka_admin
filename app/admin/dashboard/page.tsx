@@ -69,6 +69,9 @@ type YesterdaySummary = {
 
 type MonthSummary = {
   consumed_points: number
+  consumed_points_call: number
+  consumed_points_mail: number
+  consumed_points_chat: number
   revenue_jpy: number
 }
 
@@ -311,11 +314,11 @@ export default function DashboardPage() {
       </p>
       {monthSummary && (
         <p className="text-sm text-gray-500 mb-6">
-          {new Date().getMonth() + 1}月の売上金額：
-          <span className="font-medium text-gray-700">{monthSummary.revenue_jpy.toLocaleString()}円</span>
-          {" / "}
-          消費トラカ：
+          {new Date().getMonth() + 1}月の消費トラカ：
           <span className="font-medium text-gray-700">{monthSummary.consumed_points.toLocaleString()}トラカ</span>
+          <span className="text-xs text-gray-400 ml-1">
+            （電話{monthSummary.consumed_points_call.toLocaleString()} / メール{monthSummary.consumed_points_mail.toLocaleString()} / チャット{monthSummary.consumed_points_chat.toLocaleString()}）
+          </span>
         </p>
       )}
 
