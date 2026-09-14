@@ -34,6 +34,14 @@ type Announcement = {
   isRead: boolean
 }
 
+type NewsItem = {
+  id: string
+  title: string
+  is_important: boolean
+  is_published: boolean
+  created_at: string
+}
+
 export default function DashboardPage() {
   const router = useRouter()
   const [myUserId, setMyUserId] = useState<string | null>(null)
@@ -47,21 +55,25 @@ export default function DashboardPage() {
   const [unreadAnnouncementCount, setUnreadAnnouncementCount] = useState(0)
   const [loadingAnnouncements, setLoadingAnnouncements] = useState(true)
 
+  const [newsItems, setNewsItems] = useState<NewsItem[]>([])
+  const [loadingNews, setLoadingNews] = useState(true)
+
   useEffect(() => {
     init()
   }, [])
 
   const init = async () => {
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user?.email) { setLoadingReplies(false); setLoadingAnnouncements(false); return }
+    if (!user?.email) { setLoadingReplies(false); setLoadingAnnouncements(false); setLoadingNews(false); return }
     const t = EMAIL_TO_TEACHER[user.email]
-    if (!t) { setLoadingReplies(false); setLoadingAnnouncements(false); return }
+    if (!t) { setLoadingReplies(false); setLoadingAnnouncements(false); setLoadingNews(false); return }
     setMyUserId(user.id)
     setTeacherId(t.id)
 
     await Promise.all([
       fetchUnreadReplies(t.id),
       fetchAnnouncements(t.id),
+      fetchNews(),
     ])
   }
 
@@ -133,6 +145,16 @@ export default function DashboardPage() {
     })
     setAnnouncements(prev => prev.map(x => x.id === a.id ? { ...x, isRead: true } : x))
     setUnreadAnnouncementCount(c => Math.max(0, c - 1))
+  }
+
+  const fetchNews = async () => {
+    const { data } = await supabase
+      .from("news")
+      .select("id, title, is_important, is_published, created_at")
+      .order("created_at", { ascending: false })
+      .limit(30)
+    setNewsItems(data ?? [])
+    setLoadingNews(false)
   }
 
   const formatDate = (s: string | null) => {
@@ -228,6 +250,54 @@ export default function DashboardPage() {
               ))}
             </div>
           )}
+        </div>
+
+        {/* ニュース管理 */}
+        <div className="border rounded-lg bg-white overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b">
+            <h2 className="font-bold text-sm">ニュース管理</h2>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+              {newsItems.length}件
+            </span>
+          </div>
+
+          {loadingNews ? (
+            <div className="p-4 text-sm text-gray-400">読み込み中...</div>
+          ) : newsItems.length === 0 ? (
+            <div className="p-4 text-sm text-gray-400">ニュースはありません</div>
+          ) : (
+            <div className="divide-y max-h-80 overflow-y-auto">
+              {newsItems.map(n => (
+                <div
+                  key={n.id}
+                  className="flex items-center justify-between px-4 py-2.5 cursor-pointer hover:bg-gray-50"
+                  onClick={() => router.push(`/admin/news`)}
+                >
+                  <div className="min-w-0 flex items-center gap-2">
+                    <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${n.is_published ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+                      {n.is_published ? "公開中" : "非公開"}
+                    </span>
+                    {n.is_important && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 flex-shrink-0">
+                        重要
+                      </span>
+                    )}
+                    <p className="text-sm truncate">{n.title}</p>
+                  </div>
+                  <span className="text-xs text-gray-400 flex-shrink-0 ml-3">{formatDate(n.created_at)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="px-4 py-2 border-t">
+            <button
+              onClick={() => router.push(`/admin/news`)}
+              className="text-sm text-teal-600 hover:text-teal-700"
+            >
+              一覧へ →
+            </button>
+          </div>
         </div>
 
       </div>
