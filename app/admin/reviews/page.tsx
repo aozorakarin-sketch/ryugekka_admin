@@ -26,6 +26,7 @@ type Review = {
   private_message_to_teacher: string | null
   is_replied: boolean
   reply_comment: string | null
+  is_best: boolean
   created_at: string
   handle_name: string
   started_at: string | null
@@ -107,9 +108,10 @@ export default function ReviewsPage() {
 
     const { data: reviewData } = await supabase
       .from("reviews")
-      .select("id, user_id, consultation_id, satisfaction, comment, tags, private_message_to_teacher, is_replied, reply_comment, created_at")
+      .select("id, user_id, consultation_id, satisfaction, comment, tags, private_message_to_teacher, is_replied, reply_comment, is_best, created_at")
       .eq("teacher_id", t.id)
       .neq("data_source", "dummy")
+      .order("is_best", { ascending: false })
       .order("created_at", { ascending: false })
 
     if (!reviewData) { setLoading(false); return }
@@ -148,6 +150,17 @@ export default function ReviewsPage() {
     setReplyContent(r.reply_comment ?? "")
     setSelectedTemplateId("")
     setShowModal(true)
+  }
+
+  const toggleBest = async (r: Review) => {
+    if (!teacher) return
+    if (r.is_best) {
+      await supabase.from("reviews").update({ is_best: false }).eq("id", r.id)
+    } else {
+      await supabase.from("reviews").update({ is_best: false }).eq("teacher_id", teacher.id)
+      await supabase.from("reviews").update({ is_best: true }).eq("id", r.id)
+    }
+    fetchAll()
   }
 
   const handleTemplateChange = (templateId: string) => {
@@ -221,6 +234,9 @@ export default function ReviewsPage() {
                   <span className={`text-xs px-2 py-0.5 rounded-full ${r.is_replied ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"}`}>
                     {r.is_replied ? "返信済" : "未返信"}
                   </span>
+                  {r.is_best && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 font-medium">★ベスト</span>
+                  )}
                 </div>
                 {/* 鑑定日時・種別・レビュー日時 */}
                 <div className="flex items-center gap-2 mb-2 flex-wrap">
@@ -256,10 +272,16 @@ export default function ReviewsPage() {
                   </p>
                 )}
               </div>
-              <button onClick={() => openReply(r)}
-                className="text-xs bg-teal-500 hover:bg-teal-600 text-white px-3 py-1.5 rounded shrink-0">
-                {r.is_replied ? "返信を見る" : "返信する"}
-              </button>
+              <div className="flex flex-col gap-2 shrink-0">
+                <button onClick={() => openReply(r)}
+                  className="text-xs bg-teal-500 hover:bg-teal-600 text-white px-3 py-1.5 rounded">
+                  {r.is_replied ? "返信を見る" : "返信する"}
+                </button>
+                <button onClick={() => toggleBest(r)}
+                  className={`text-xs px-3 py-1.5 rounded border ${r.is_best ? "bg-yellow-50 text-yellow-700 border-yellow-300 hover:bg-yellow-100" : "bg-white text-gray-500 border-gray-300 hover:bg-gray-50"}`}>
+                  {r.is_best ? "ベスト解除" : "ベストに設定"}
+                </button>
+              </div>
             </div>
           </div>
         ))}
