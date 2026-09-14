@@ -67,10 +67,16 @@ type YesterdaySummary = {
   revenue_jpy: number
 }
 
+type MonthSummary = {
+  consumed_points: number
+  revenue_jpy: number
+}
+
 export default function DashboardPage() {
   const router = useRouter()
   const [myUserId, setMyUserId] = useState<string | null>(null)
   const [teacherId, setTeacherId] = useState<string | null>(null)
+  const [teacherName, setTeacherName] = useState<string | null>(null)
 
   const [unreadReplies, setUnreadReplies] = useState<UnreadReply[]>([])
   const [unreadReplyCount, setUnreadReplyCount] = useState(0)
@@ -93,6 +99,8 @@ export default function DashboardPage() {
   const [yesterdaySummary, setYesterdaySummary] = useState<YesterdaySummary | null>(null)
   const [loadingSummary, setLoadingSummary] = useState(true)
 
+  const [monthSummary, setMonthSummary] = useState<MonthSummary | null>(null)
+
   useEffect(() => {
     init()
   }, [])
@@ -104,6 +112,7 @@ export default function DashboardPage() {
     if (!t) { setLoadingReplies(false); setLoadingAnnouncements(false); setLoadingNews(false); setLoadingBirthdays(false); setLoadingReviews(false); setLoadingSummary(false); return }
     setMyUserId(user.id)
     setTeacherId(t.id)
+    setTeacherName(t.name)
 
     await Promise.all([
       fetchUnreadReplies(t.id),
@@ -112,6 +121,7 @@ export default function DashboardPage() {
       fetchBirthdays(t.id),
       fetchUnrepliedReviews(t.id),
       fetchYesterdaySummary(t.id),
+      fetchMonthSummary(t.id),
     ])
   }
 
@@ -273,6 +283,15 @@ export default function DashboardPage() {
     setLoadingSummary(false)
   }
 
+  const fetchMonthSummary = async (myTeacherId: string) => {
+    const { data, error } = await supabase
+      .rpc("get_month_summary", { p_teacher_id: myTeacherId })
+      .single()
+    if (!error && data) {
+      setMonthSummary(data as MonthSummary)
+    }
+  }
+
   const formatDate = (s: string | null) => {
     if (!s) return "-"
     const d = new Date(s)
@@ -287,9 +306,18 @@ export default function DashboardPage() {
   return (
     <div>
       <h1 className="text-2xl font-bold mb-4">ダッシュボード</h1>
-      <p className="text-gray-600 dark:text-gray-400 mb-6">
-        ようこそ、龍月花管理画面へ！
+      <p className="text-gray-600 dark:text-gray-400 mb-2">
+        {teacherName ? `ようこそ！${teacherName}先生！龍月花管理画面へ！` : "ようこそ、龍月花管理画面へ！"}
       </p>
+      {monthSummary && (
+        <p className="text-sm text-gray-500 mb-6">
+          {new Date().getMonth() + 1}月の売上金額：
+          <span className="font-medium text-gray-700">{monthSummary.revenue_jpy.toLocaleString()}円</span>
+          {" / "}
+          消費トラカ：
+          <span className="font-medium text-gray-700">{monthSummary.consumed_points.toLocaleString()}トラカ</span>
+        </p>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl">
 
