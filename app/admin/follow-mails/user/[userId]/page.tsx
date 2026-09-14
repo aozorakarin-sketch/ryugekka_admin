@@ -29,6 +29,9 @@ type FollowMail = {
   content: string
   sent_at: string
   is_draft: boolean
+  user_reply: string | null
+  user_replied_at: string | null
+  is_user_replied: boolean
 }
 
 export default function UserFollowMailsPage() {
@@ -69,7 +72,7 @@ export default function UserFollowMailsPage() {
 
     const { data: mailData } = await supabase
       .from("follow_mails")
-      .select("id, subject, content, sent_at, is_draft")
+      .select("id, subject, content, sent_at, is_draft, user_reply, user_replied_at, is_user_replied")
       .eq("user_id", userId)
       .eq("teacher_id", teacherId)
       .order("sent_at", { ascending: false })
@@ -135,6 +138,11 @@ export default function UserFollowMailsPage() {
                 <span className={`text-xs px-2 py-0.5 rounded-full ${m.is_draft ? "bg-gray-100 text-gray-600" : "bg-green-100 text-green-700"}`}>
                   {m.is_draft ? "下書き" : "送信済"}
                 </span>
+                {m.is_user_replied && (
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-pink-100 text-pink-700">
+                    返信あり
+                  </span>
+                )}
                 <span className="text-sm font-medium">{m.subject}</span>
               </div>
               <span className="text-xs text-gray-400">{formatDate(m.sent_at)}</span>
@@ -142,6 +150,17 @@ export default function UserFollowMailsPage() {
             {openId === m.id && (
               <div className="px-4 py-3 border-t bg-gray-50">
                 <p className="text-sm whitespace-pre-wrap">{m.content}</p>
+                {m.is_user_replied && m.user_reply && (
+                  <div className="mt-4 pt-4 border-t">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-xs font-medium text-pink-700">💬 あなたの返信</span>
+                      <span className="text-xs text-gray-400">{formatDate(m.user_replied_at ?? "")}</span>
+                    </div>
+                    <div className="bg-pink-50 rounded-lg px-3 py-2">
+                      <p className="text-sm whitespace-pre-wrap">{m.user_reply}</p>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
