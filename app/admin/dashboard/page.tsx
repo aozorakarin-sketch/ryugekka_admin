@@ -42,6 +42,13 @@ type NewsItem = {
   created_at: string
 }
 
+type Birthday = {
+  user_id: string
+  handle_name: string
+  birth_date: string
+  daysUntil: number
+}
+
 export default function DashboardPage() {
   const router = useRouter()
   const [myUserId, setMyUserId] = useState<string | null>(null)
@@ -58,15 +65,18 @@ export default function DashboardPage() {
   const [newsItems, setNewsItems] = useState<NewsItem[]>([])
   const [loadingNews, setLoadingNews] = useState(true)
 
+  const [birthdays, setBirthdays] = useState<Birthday[]>([])
+  const [loadingBirthdays, setLoadingBirthdays] = useState(true)
+
   useEffect(() => {
     init()
   }, [])
 
   const init = async () => {
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user?.email) { setLoadingReplies(false); setLoadingAnnouncements(false); setLoadingNews(false); return }
+    if (!user?.email) { setLoadingReplies(false); setLoadingAnnouncements(false); setLoadingNews(false); setLoadingBirthdays(false); return }
     const t = EMAIL_TO_TEACHER[user.email]
-    if (!t) { setLoadingReplies(false); setLoadingAnnouncements(false); setLoadingNews(false); return }
+    if (!t) { setLoadingReplies(false); setLoadingAnnouncements(false); setLoadingNews(false); setLoadingBirthdays(false); return }
     setMyUserId(user.id)
     setTeacherId(t.id)
 
@@ -74,6 +84,7 @@ export default function DashboardPage() {
       fetchUnreadReplies(t.id),
       fetchAnnouncements(t.id),
       fetchNews(),
+      fetchBirthdays(t.id),
     ])
   }
 
@@ -94,7 +105,7 @@ export default function DashboardPage() {
       .eq("is_user_replied", true)
       .eq("is_reply_read", false)
       .order("user_replied_at", { ascending: false })
-      .limit(5)
+      .limit(20)
 
     const mapped: UnreadReply[] = (replyData ?? []).map((r: any) => ({
       id: r.id,
@@ -113,7 +124,7 @@ export default function DashboardPage() {
       .from("announcements")
       .select("id, title, teacher_id, created_at, is_important")
       .order("created_at", { ascending: false })
-      .limit(30)
+      .limit(20)
 
     const { data: readData } = await supabase
       .from("announcement_reads")
@@ -152,15 +163,59 @@ export default function DashboardPage() {
       .from("news")
       .select("id, title, is_important, is_published, created_at")
       .order("created_at", { ascending: false })
-      .limit(30)
+      .limit(20)
     setNewsItems(data ?? [])
     setLoadingNews(false)
+  }
+
+  const daysUntilNextBirthday = (birthDate: string): number => {
+    const [, m, d] = birthDate.split("-").map(Number)
+    const today = new Date()
+    const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+    let next = new Date(today.getFullYear(), m - 1, d)
+    if (next < todayMidnight) next = new Date(today.getFullYear() + 1, m - 1, d)
+    return Math.round((next.getTime() - todayMidnight.getTime()) / 86400000)
+  }
+
+  const fetchBirthdays = async (myTeacherId: string) => {
+    const [{ data: consultUsers }, { data: chatUsers }] = await Promise.all([
+      supabase.from("consultations").select("user_id").eq("teacher_id", myTeacherId),
+      supabase.from("chat_sessions").select("user_id").eq("teacher_id", myTeacherId),
+    ])
+    const userIds = Array.from(new Set([
+      ...(consultUsers ?? []).map((r: any) => r.user_id),
+      ...(chatUsers ?? []).map((r: any) => r.user_id),
+    ]))
+
+    if (userIds.length === 0) { setLoadingBirthdays(false); return }
+
+    const { data: profiles } = await supabase
+      .from("user_profiles")
+      .select("user_id, birth_date, users(handle_name)")
+      .in("user_id", userIds)
+      .not("birth_date", "is", null)
+
+    const mapped: Birthday[] = (profiles ?? []).map((p: any) => ({
+      user_id: p.user_id,
+      handle_name: p.users?.handle_name ?? "-",
+      birth_date: p.birth_date,
+      daysUntil: daysUntilNextBirthday(p.birth_date),
+    }))
+
+    mapped.sort((a, b) => a.daysUntil - b.daysUntil)
+    setBirthdays(mapped.slice(0, 20))
+    setLoadingBirthdays(false)
   }
 
   const formatDate = (s: string | null) => {
     if (!s) return "-"
     const d = new Date(s)
     return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`
+  }
+
+  const formatBirthDate = (s: string) => {
+    const [y, m, d] = s.split("-").map(Number)
+    return `${y}年${m}月${d}日`
   }
 
   return (
@@ -188,7 +243,7 @@ export default function DashboardPage() {
           ) : announcements.length === 0 ? (
             <div className="p-4 text-sm text-gray-400">お知らせはありません</div>
           ) : (
-            <div className="divide-y max-h-80 overflow-y-auto">
+            <div className="divide-y max-h-56 overflow-y-auto">
               {announcements.map(a => (
                 <div
                   key={a.id}
@@ -218,40 +273,6 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* フォローメールへの返信 */}
-        <div className="border rounded-lg bg-white overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b">
-            <h2 className="font-bold text-sm">フォローメールへの返信</h2>
-            {unreadReplyCount > 0 && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-bold">
-                未読 {unreadReplyCount}件
-              </span>
-            )}
-          </div>
-
-          {loadingReplies ? (
-            <div className="p-4 text-sm text-gray-400">読み込み中...</div>
-          ) : unreadReplies.length === 0 ? (
-            <div className="p-4 text-sm text-gray-400">未読の返信はありません</div>
-          ) : (
-            <div className="divide-y">
-              {unreadReplies.map(r => (
-                <div
-                  key={r.id}
-                  className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-gray-50"
-                  onClick={() => router.push(`/admin/follow-mails/user/${r.user_id}?teacherId=${teacherId}`)}
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">{r.handle_name}</p>
-                    <p className="text-xs text-gray-500 truncate max-w-xs">{r.user_reply}</p>
-                  </div>
-                  <span className="text-xs text-gray-400 flex-shrink-0 ml-3">{formatDate(r.user_replied_at)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
         {/* ニュース管理 */}
         <div className="border rounded-lg bg-white overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b">
@@ -266,7 +287,7 @@ export default function DashboardPage() {
           ) : newsItems.length === 0 ? (
             <div className="p-4 text-sm text-gray-400">ニュースはありません</div>
           ) : (
-            <div className="divide-y max-h-80 overflow-y-auto">
+            <div className="divide-y max-h-56 overflow-y-auto">
               {newsItems.map(n => (
                 <div
                   key={n.id}
@@ -298,6 +319,76 @@ export default function DashboardPage() {
               一覧へ →
             </button>
           </div>
+        </div>
+
+        {/* 誕生日 */}
+        <div className="border rounded-lg bg-white overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b">
+            <h2 className="font-bold text-sm">誕生日</h2>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+              {birthdays.length}人
+            </span>
+          </div>
+
+          {loadingBirthdays ? (
+            <div className="p-4 text-sm text-gray-400">読み込み中...</div>
+          ) : birthdays.length === 0 ? (
+            <div className="p-4 text-sm text-gray-400">誕生日の登録があるユーザーがいません</div>
+          ) : (
+            <div className="divide-y max-h-56 overflow-y-auto">
+              {birthdays.map(b => (
+                <div
+                  key={b.user_id}
+                  className="flex items-center justify-between px-4 py-2.5 cursor-pointer hover:bg-gray-50"
+                  onClick={() => router.push(`/admin/users/${b.user_id}`)}
+                >
+                  <div className="min-w-0 flex items-center gap-2">
+                    {b.daysUntil === 0 && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-pink-100 text-pink-700 flex-shrink-0">
+                        本日🎂
+                      </span>
+                    )}
+                    <p className="text-sm truncate">{b.handle_name}</p>
+                  </div>
+                  <span className="text-xs text-gray-400 flex-shrink-0 ml-3">{formatBirthDate(b.birth_date)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* フォローメールへの返信 */}
+        <div className="border rounded-lg bg-white overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b">
+            <h2 className="font-bold text-sm">フォローメールへの返信</h2>
+            {unreadReplyCount > 0 && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-bold">
+                未読 {unreadReplyCount}件
+              </span>
+            )}
+          </div>
+
+          {loadingReplies ? (
+            <div className="p-4 text-sm text-gray-400">読み込み中...</div>
+          ) : unreadReplies.length === 0 ? (
+            <div className="p-4 text-sm text-gray-400">未読の返信はありません</div>
+          ) : (
+            <div className="divide-y max-h-56 overflow-y-auto">
+              {unreadReplies.map(r => (
+                <div
+                  key={r.id}
+                  className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-gray-50"
+                  onClick={() => router.push(`/admin/follow-mails/user/${r.user_id}?teacherId=${teacherId}`)}
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{r.handle_name}</p>
+                    <p className="text-xs text-gray-500 truncate max-w-xs">{r.user_reply}</p>
+                  </div>
+                  <span className="text-xs text-gray-400 flex-shrink-0 ml-3">{formatDate(r.user_replied_at)}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
       </div>
