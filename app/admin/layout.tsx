@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabaseClient"
 import { useRouter, usePathname } from "next/navigation"
 import { useEffect, useState } from "react"
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
-import { LayoutDashboard, Users, MessageSquare, Mic, Calendar, Settings, LogOut, Star, FileText, Phone, Bell, Coins, Newspaper, HelpCircle, Mail, TrendingUp } from "lucide-react"
+import { LayoutDashboard, Users, MessageSquare, Mic, Calendar, Settings, LogOut, Star, FileText, Phone, Bell, Coins, Newspaper, HelpCircle, Mail, TrendingUp, Image as ImageIcon } from "lucide-react"
 
 const ALLOWED_EMAILS = [
   'bazvideo412@gmail.com',
@@ -34,6 +34,7 @@ const menuItems = [
   { title: "ポイント付与", url: "/admin/points", icon: Coins },
   { title: "設定", url: "/admin/settings", icon: Settings },
   { title: "通話", url: "/admin/call", icon: Phone },
+  { title: "トップページ管理", url: "/admin/top-page", icon: ImageIcon },
 ]
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
