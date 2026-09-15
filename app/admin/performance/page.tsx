@@ -9,6 +9,12 @@ const EMAIL_TO_TEACHER: Record<string, { id: string; name: string }> = {
   "bazvideo412@gmail.com": { id: "3ba85bb9-9065-461b-b76b-cc488d4c0c3b", name: "雲龍蓮" },
 }
 
+const TEACHERS: { id: string; name: string }[] = [
+  { id: "3ba85bb9-9065-461b-b76b-cc488d4c0c3b", name: "雲龍蓮" },
+  { id: "17cf0ca1-7526-466e-a644-9d3efefa4091", name: "椎名架月" },
+  { id: "cd2c4101-2e24-4ae2-8d6a-507a943904af", name: "青空花林" },
+]
+
 interface MonthlyPerf {
   revenue_jpy: number
   shop_revenue_jpy: number
@@ -58,8 +64,9 @@ function Card({ label, value, sub, color }: { label: string; value: string; sub?
 }
 
 export default function PerformancePage() {
-  const [teacherId, setTeacherId] = useState<string | null>(null)
-  const [teacherName, setTeacherName] = useState<string | null>(null)
+  const [teacherId, setTeacherId] = useState<string>(TEACHERS[0].id)
+  const [authChecked, setAuthChecked] = useState(false)
+  const [isAuthorized, setIsAuthorized] = useState(false)
 
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
@@ -75,30 +82,38 @@ export default function PerformancePage() {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user?.email && EMAIL_TO_TEACHER[user.email]) {
         setTeacherId(EMAIL_TO_TEACHER[user.email].id)
-        setTeacherName(EMAIL_TO_TEACHER[user.email].name)
-      } else {
-        setLoading(false)
+        setIsAuthorized(true)
+      } else if (user?.email) {
+        // teachersテーブルにメールがあれば先生として閲覧可（自分以外のタブから見る場合など）
+        setIsAuthorized(true)
       }
+      setAuthChecked(true)
     })
   }, [])
 
   const load = useCallback(async () => {
     if (!teacherId) return
     setLoading(true)
-    const [{ data: m }, { data: h }, { data: t }, { data: d }] = await Promise.all([
-      supabase.rpc("get_monthly_performance", { p_teacher_id: teacherId, p_year: year, p_month: month }).single(),
-      supabase.rpc("get_hourly_performance", { p_teacher_id: teacherId, p_year: year, p_month: month }),
-      supabase.rpc("get_performance_trend", { p_teacher_id: teacherId, p_months: 3 }),
-      supabase.rpc("get_daily_revenue", { p_teacher_id: teacherId, p_year: year, p_month: month }),
-    ])
-    setMonthly((m as MonthlyPerf) ?? null)
-    setHourly((h as HourlyPerf[]) ?? [])
-    setTrend((t as TrendRow[]) ?? [])
-    setDaily((d as DailyRevenue[]) ?? [])
-    setLoading(false)
+    try {
+      const res = await fetch(`/api/admin/performance?teacherId=${teacherId}&year=${year}&month=${month}`)
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? '取得に失敗しました')
+      setMonthly(json.monthly ?? null)
+      setHourly(json.hourly ?? [])
+      setTrend(json.trend ?? [])
+      setDaily(json.daily ?? [])
+    } catch (err) {
+      console.error(err)
+      setMonthly(null)
+      setHourly([])
+      setTrend([])
+      setDaily([])
+    } finally {
+      setLoading(false)
+    }
   }, [teacherId, year, month])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { if (authChecked && isAuthorized) load() }, [authChecked, isAuthorized, load])
 
   const goPrevMonth = () => {
     if (month === 1) { setYear(y => y - 1); setMonth(12) } else { setMonth(m => m - 1) }
@@ -115,7 +130,7 @@ export default function PerformancePage() {
     return `${parseInt(mm, 10)}月`
   }
 
-  if (!teacherId && !loading) {
+  if (authChecked && !isAuthorized) {
     return <div className="p-6 text-sm text-gray-500">この画面は先生アカウントでログインしている場合のみ表示されます。</div>
   }
 
@@ -132,7 +147,19 @@ export default function PerformancePage() {
         </div>
       </div>
 
-      {teacherName && <p className="text-sm text-gray-500 mb-4">{teacherName}先生</p>}
+      <div className="flex items-center gap-2 mb-4">
+        {TEACHERS.map(t => (
+          <button
+            key={t.id}
+            onClick={() => setTeacherId(t.id)}
+            className={`px-4 py-1.5 rounded-full text-sm font-medium border ${
+              teacherId === t.id ? "bg-teal-600 text-white border-teal-600" : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
+            }`}
+          >
+            {t.name}
+          </button>
+        ))}
+      </div>
 
       {loading && <p className="text-sm text-gray-400">集計中...</p>}
 
