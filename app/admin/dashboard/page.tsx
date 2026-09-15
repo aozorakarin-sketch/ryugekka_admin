@@ -75,6 +75,20 @@ type MonthSummary = {
   revenue_jpy: number
 }
 
+type MonthShopSummary = {
+  revenue_jpy: number
+  order_count: number
+}
+
+type PendingShopOrder = {
+  id: string
+  quantity: number
+  total_price: number
+  recipient_name: string
+  created_at: string
+  product_name: string
+}
+
 export default function DashboardPage() {
   const router = useRouter()
   const [myUserId, setMyUserId] = useState<string | null>(null)
@@ -103,6 +117,9 @@ export default function DashboardPage() {
   const [loadingSummary, setLoadingSummary] = useState(true)
 
   const [monthSummary, setMonthSummary] = useState<MonthSummary | null>(null)
+  const [monthShopSummary, setMonthShopSummary] = useState<MonthShopSummary | null>(null)
+  const [pendingShopOrders, setPendingShopOrders] = useState<PendingShopOrder[]>([])
+  const [loadingShopOrders, setLoadingShopOrders] = useState(true)
 
   useEffect(() => {
     init()
@@ -110,9 +127,9 @@ export default function DashboardPage() {
 
   const init = async () => {
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user?.email) { setLoadingReplies(false); setLoadingAnnouncements(false); setLoadingNews(false); setLoadingBirthdays(false); setLoadingReviews(false); setLoadingSummary(false); return }
+    if (!user?.email) { setLoadingReplies(false); setLoadingAnnouncements(false); setLoadingNews(false); setLoadingBirthdays(false); setLoadingReviews(false); setLoadingSummary(false); setLoadingShopOrders(false); return }
     const t = EMAIL_TO_TEACHER[user.email]
-    if (!t) { setLoadingReplies(false); setLoadingAnnouncements(false); setLoadingNews(false); setLoadingBirthdays(false); setLoadingReviews(false); setLoadingSummary(false); return }
+    if (!t) { setLoadingReplies(false); setLoadingAnnouncements(false); setLoadingNews(false); setLoadingBirthdays(false); setLoadingReviews(false); setLoadingSummary(false); setLoadingShopOrders(false); return }
     setMyUserId(user.id)
     setTeacherId(t.id)
     setTeacherName(t.name)
@@ -125,6 +142,8 @@ export default function DashboardPage() {
       fetchUnrepliedReviews(t.id),
       fetchYesterdaySummary(t.id),
       fetchMonthSummary(t.id),
+      fetchMonthShopSummary(t.id),
+      fetchPendingShopOrders(t.id),
     ])
   }
 
@@ -295,6 +314,45 @@ export default function DashboardPage() {
     }
   }
 
+  const fetchMonthShopSummary = async (myTeacherId: string) => {
+    const now = new Date()
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+
+    const { data } = await supabase
+      .from("shop_orders")
+      .select("total_price")
+      .eq("teacher_id", myTeacherId)
+      .in("status", ["paid", "shipped"])
+      .gte("paid_at", monthStart)
+
+    const rows = data ?? []
+    setMonthShopSummary({
+      revenue_jpy: rows.reduce((sum: number, r: any) => sum + (r.total_price ?? 0), 0),
+      order_count: rows.length,
+    })
+  }
+
+  const fetchPendingShopOrders = async (myTeacherId: string) => {
+    const { data } = await supabase
+      .from("shop_orders")
+      .select("id, quantity, total_price, recipient_name, created_at, shop_products(name)")
+      .eq("teacher_id", myTeacherId)
+      .eq("status", "paid")
+      .order("paid_at", { ascending: true })
+      .limit(20)
+
+    const mapped: PendingShopOrder[] = (data ?? []).map((o: any) => ({
+      id: o.id,
+      quantity: o.quantity,
+      total_price: o.total_price,
+      recipient_name: o.recipient_name,
+      created_at: o.created_at,
+      product_name: o.shop_products?.name ?? "-",
+    }))
+    setPendingShopOrders(mapped)
+    setLoadingShopOrders(false)
+  }
+
   const formatDate = (s: string | null) => {
     if (!s) return "-"
     const d = new Date(s)
@@ -312,19 +370,40 @@ export default function DashboardPage() {
       <p className="text-gray-600 dark:text-gray-400 mb-2">
         {teacherName ? `ようこそ！${teacherName}先生！龍月花管理画面へ！` : "ようこそ、龍月花管理画面へ！"}
       </p>
-      {monthSummary && (
+      {(monthSummary || monthShopSummary) && (
         <div className="text-sm text-gray-500 mb-6 space-y-1">
-          <p>
-            {new Date().getMonth() + 1}月のトラカ売上：
-            <span className="font-medium text-gray-700">{monthSummary.revenue_jpy.toLocaleString()}円</span>
-          </p>
-          <p>
-            {new Date().getMonth() + 1}月の消費トラカ：
-            <span className="font-medium text-gray-700">{monthSummary.consumed_points.toLocaleString()}トラカ</span>
-            <span className="text-xs text-gray-400 ml-1">
-              （電話{monthSummary.consumed_points_call.toLocaleString()} / メール{monthSummary.consumed_points_mail.toLocaleString()} / チャット{monthSummary.consumed_points_chat.toLocaleString()}）
-            </span>
-          </p>
+          {monthSummary && (
+            <>
+              <p>
+                {new Date().getMonth() + 1}月のトラカ売上：
+                <span className="font-medium text-gray-700">{monthSummary.revenue_jpy.toLocaleString()}円</span>
+              </p>
+              <p>
+                {new Date().getMonth() + 1}月の消費トラカ：
+                <span className="font-medium text-gray-700">{monthSummary.consumed_points.toLocaleString()}トラカ</span>
+                <span className="text-xs text-gray-400 ml-1">
+                  （電話{monthSummary.consumed_points_call.toLocaleString()} / メール{monthSummary.consumed_points_mail.toLocaleString()} / チャット{monthSummary.consumed_points_chat.toLocaleString()}）
+                </span>
+              </p>
+            </>
+          )}
+          {monthShopSummary && (
+            <p>
+              {new Date().getMonth() + 1}月のショップ売上：
+              <span className="font-medium text-gray-700">{monthShopSummary.revenue_jpy.toLocaleString()}円</span>
+              <span className="text-xs text-gray-400 ml-1">
+                （注文{monthShopSummary.order_count.toLocaleString()}件）
+              </span>
+            </p>
+          )}
+          {monthSummary && monthShopSummary && (
+            <p>
+              {new Date().getMonth() + 1}月の総売上：
+              <span className="font-bold text-gray-800">
+                {(monthSummary.revenue_jpy + monthShopSummary.revenue_jpy).toLocaleString()}円
+              </span>
+            </p>
+          )}
         </div>
       )}
 
@@ -537,6 +616,49 @@ export default function DashboardPage() {
               ))}
             </div>
           )}
+        </div>
+
+        {/* ショップ注文（未発送） */}
+        <div className="border rounded-lg bg-white overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b">
+            <h2 className="font-bold text-sm">ショップ注文（未発送）</h2>
+            {pendingShopOrders.length > 0 && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-bold">
+                {pendingShopOrders.length}件
+              </span>
+            )}
+          </div>
+
+          {loadingShopOrders ? (
+            <div className="p-4 text-sm text-gray-400">読み込み中...</div>
+          ) : pendingShopOrders.length === 0 ? (
+            <div className="p-4 text-sm text-gray-400">未発送の注文はありません</div>
+          ) : (
+            <div className="divide-y max-h-56 overflow-y-auto">
+              {pendingShopOrders.map(o => (
+                <div
+                  key={o.id}
+                  className="flex items-center justify-between px-4 py-2.5 cursor-pointer hover:bg-gray-50"
+                  onClick={() => router.push(`/admin/shop`)}
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm truncate">{o.product_name} × {o.quantity}</p>
+                    <p className="text-xs text-gray-400 truncate">{o.recipient_name} 様　¥{o.total_price.toLocaleString()}</p>
+                  </div>
+                  <span className="text-xs text-gray-400 flex-shrink-0 ml-3">{formatDate(o.created_at)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="px-4 py-2 border-t">
+            <button
+              onClick={() => router.push(`/admin/shop`)}
+              className="text-sm text-teal-600 hover:text-teal-700"
+            >
+              ショップ管理へ →
+            </button>
+          </div>
         </div>
 
         {/* 前日成果 */}
