@@ -108,6 +108,8 @@ export default function PerformancePage() {
   }
 
   const yen = (n: number) => `${n.toLocaleString()}円`
+  const repeatRate = (repeat: number, total: number) =>
+    total === 0 ? 0 : Math.round((repeat / total) * 1000) / 10
   const monthLabel = (m: string) => {
     const [, mm] = m.split("-")
     return `${parseInt(mm, 10)}月`
@@ -157,6 +159,11 @@ export default function PerformancePage() {
               value={`${monthly.total_user_count.toLocaleString()}人`}
               sub={`（新規${monthly.new_user_count} / リピート${monthly.repeat_user_count}）`}
               color="bg-pink-600"
+            />
+            <Card
+              label="リピート率"
+              value={`${repeatRate(monthly.repeat_user_count, monthly.total_user_count)}%`}
+              color="bg-indigo-500"
             />
           </div>
 
@@ -215,6 +222,7 @@ export default function PerformancePage() {
                   <th className="p-2">ユーザー数</th>
                   <th className="p-2">新規</th>
                   <th className="p-2">リピート</th>
+                  <th className="p-2">リピート率</th>
                   <th className="p-2">トラカ売上</th>
                   <th className="p-2">ショップ売上</th>
                   <th className="p-2">総売上</th>
@@ -233,6 +241,7 @@ export default function PerformancePage() {
                     <td className="p-2">{row.total_user_count}</td>
                     <td className="p-2">{row.new_user_count}</td>
                     <td className="p-2">{row.repeat_user_count}</td>
+                    <td className="p-2">{repeatRate(row.repeat_user_count, row.total_user_count)}%</td>
                     <td className="p-2">{yen(row.revenue_jpy)}</td>
                     <td className="p-2">{yen(row.shop_revenue_jpy)}</td>
                     <td className="p-2 font-bold">{yen(row.combined_revenue_jpy)}</td>
