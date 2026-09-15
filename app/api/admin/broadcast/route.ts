@@ -32,7 +32,8 @@ async function getTargetUsers(sender: string): Promise<TargetUser[]> {
   if (sender === 'info') {
     const { data, error } = await supabase
       .from('users')
-      .select('id, email, handle_name');
+      .select('id, email, handle_name')
+      .neq('data_source', 'minden');
     if (error) throw error;
     return (data ?? []).filter(u => !!u.email);
   }
@@ -53,7 +54,8 @@ async function getTargetUsers(sender: string): Promise<TargetUser[]> {
   const { data: users, error: uErr } = await supabase
     .from('users')
     .select('id, email, handle_name')
-    .in('id', userIds);
+    .in('id', userIds)
+    .neq('data_source', 'minden');
   if (uErr) throw uErr;
 
   return (users ?? []).filter(u => !!u.email);
