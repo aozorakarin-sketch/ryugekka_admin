@@ -9,11 +9,15 @@ interface TeacherStat {
   revenueJpyUnknownCount: number
   purchaseCount: number
   pointsUsed: { call: number; chat: number; mail: number; other: number; total: number }
+  shopRevenueJpy: number
+  shopOrderCount: number
 }
 
 interface SalesResponse {
   period: { from: string; to: string }
   totalRevenueJpy: number
+  totalShopRevenueJpy: number
+  combinedRevenueJpy: number
   totalPointsUsed: number
   teachers: TeacherStat[]
 }
@@ -21,6 +25,8 @@ interface SalesResponse {
 interface MonthBucket {
   month: string
   totalRevenueJpy: number
+  totalShopRevenueJpy: number
+  combinedRevenueJpy: number
   totalPointsUsed: number
   teachers: TeacherStat[]
 }
@@ -45,7 +51,8 @@ const TSUKI_TEACHER_ID = '17cf0ca1-7526-466e-a644-9d3efefa4091'
 const SHARE_RATE = 0.05 // 5%
 
 function getTeacherRevenue(bucket: MonthBucket, teacherId: string): number {
-  return bucket.teachers.find(t => t.teacherId === teacherId)?.revenueJpy ?? 0
+  const t = bucket.teachers.find(t => t.teacherId === teacherId)
+  return (t?.revenueJpy ?? 0) + (t?.shopRevenueJpy ?? 0)
 }
 
 // monthKey（'YYYY-MM'）の翌月・指定日を計算する
@@ -143,6 +150,8 @@ export default function SalesDashboardPage() {
       : data!.teachers.filter(t => t.teacherId === selectedTeacherId)
     : []
   const filteredTotalRevenueJpy = filteredTeachers.reduce((sum, t) => sum + t.revenueJpy, 0)
+  const filteredTotalShopRevenueJpy = filteredTeachers.reduce((sum, t) => sum + t.shopRevenueJpy, 0)
+  const filteredTotalCombinedRevenueJpy = filteredTotalRevenueJpy + filteredTotalShopRevenueJpy
   const filteredTotalPointsUsed = filteredTeachers.reduce((sum, t) => sum + t.pointsUsed.total, 0)
 
   // 月別データも同じ先生選択タブでフィルタする
@@ -152,8 +161,12 @@ export default function SalesDashboardPage() {
     const list = selectedTeacherId === 'all'
       ? teachers
       : teachers.filter(t => t.teacherId === selectedTeacherId)
+    const revenueJpy = list.reduce((sum, t) => sum + (t.revenueJpy ?? 0), 0)
+    const shopRevenueJpy = list.reduce((sum, t) => sum + (t.shopRevenueJpy ?? 0), 0)
     return {
-      revenueJpy: list.reduce((sum, t) => sum + (t.revenueJpy ?? 0), 0),
+      revenueJpy,
+      shopRevenueJpy,
+      combinedRevenueJpy: revenueJpy + shopRevenueJpy,
       pointsUsed: list.reduce((sum, t) => sum + (t.pointsUsed?.total ?? 0), 0),
     }
   }
@@ -161,8 +174,10 @@ export default function SalesDashboardPage() {
   const monthlyMonths = Array.isArray(monthlyData?.months) ? monthlyData!.months : []
 
   const yearTotalRevenueJpy = monthlyMonths.reduce((sum, m) => sum + monthStat(m).revenueJpy, 0)
+  const yearTotalShopRevenueJpy = monthlyMonths.reduce((sum, m) => sum + monthStat(m).shopRevenueJpy, 0)
+  const yearTotalCombinedRevenueJpy = yearTotalRevenueJpy + yearTotalShopRevenueJpy
   const yearTotalPointsUsed = monthlyMonths.reduce((sum, m) => sum + monthStat(m).pointsUsed, 0)
-  const monthlyMaxRevenue = Math.max(1, ...monthlyMonths.map(m => monthStat(m).revenueJpy))
+  const monthlyMaxRevenue = Math.max(1, ...monthlyMonths.map(m => monthStat(m).combinedRevenueJpy))
 
   return (
     <div style={{ padding: '24px 32px', maxWidth: 1000 }}>
@@ -258,8 +273,16 @@ export default function SalesDashboardPage() {
           {/* 合計サマリー（先生選択タブの結果を反映） */}
           <div style={{ display: 'flex', gap: 16, marginBottom: 24 }}>
             <div style={{ background: '#f0f7ff', borderRadius: 10, padding: '16px 24px', flex: 1 }}>
-              <div style={{ fontSize: '0.75rem', color: '#666' }}>期間合計 決済額</div>
+              <div style={{ fontSize: '0.75rem', color: '#666' }}>期間合計 決済額（トラカ）</div>
               <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#2d6a8f' }}>{yen(filteredTotalRevenueJpy)}</div>
+            </div>
+            <div style={{ background: '#fff5f0', borderRadius: 10, padding: '16px 24px', flex: 1 }}>
+              <div style={{ fontSize: '0.75rem', color: '#666' }}>期間合計 ショップ売上</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#b8622d' }}>{yen(filteredTotalShopRevenueJpy)}</div>
+            </div>
+            <div style={{ background: '#f0fff4', borderRadius: 10, padding: '16px 24px', flex: 1 }}>
+              <div style={{ fontSize: '0.75rem', color: '#666' }}>期間合計 総売上</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#2a8f5a' }}>{yen(filteredTotalCombinedRevenueJpy)}</div>
             </div>
             <div style={{ background: '#f5f5f5', borderRadius: 10, padding: '16px 24px', flex: 1 }}>
               <div style={{ fontSize: '0.75rem', color: '#666' }}>期間合計 トラカ消費</div>
@@ -272,8 +295,10 @@ export default function SalesDashboardPage() {
             <thead>
               <tr style={{ borderBottom: '2px solid #ddd', textAlign: 'right' }}>
                 <th style={{ textAlign: 'left', padding: '8px 4px' }}>先生</th>
-                <th style={{ padding: '8px 4px' }}>決済額</th>
+                <th style={{ padding: '8px 4px' }}>決済額（トラカ）</th>
                 <th style={{ padding: '8px 4px' }}>購入件数</th>
+                <th style={{ padding: '8px 4px' }}>ショップ売上</th>
+                <th style={{ padding: '8px 4px' }}>ショップ注文</th>
                 <th style={{ padding: '8px 4px' }}>通話</th>
                 <th style={{ padding: '8px 4px' }}>チャット</th>
                 <th style={{ padding: '8px 4px' }}>メール</th>
@@ -294,6 +319,8 @@ export default function SalesDashboardPage() {
                     )}
                   </td>
                   <td style={{ padding: '10px 4px' }}>{t.purchaseCount.toLocaleString()}件</td>
+                  <td style={{ padding: '10px 4px' }}>{yen(t.shopRevenueJpy)}</td>
+                  <td style={{ padding: '10px 4px' }}>{t.shopOrderCount.toLocaleString()}件</td>
                   <td style={{ padding: '10px 4px' }}>{pt(t.pointsUsed.call)}</td>
                   <td style={{ padding: '10px 4px' }}>{pt(t.pointsUsed.chat)}</td>
                   <td style={{ padding: '10px 4px' }}>{pt(t.pointsUsed.mail)}</td>
@@ -302,7 +329,7 @@ export default function SalesDashboardPage() {
                 </tr>
               ))}
               {filteredTeachers.length === 0 && (
-                <tr><td colSpan={8} style={{ padding: 20, textAlign: 'center', color: '#999' }}>この期間のデータはありません</td></tr>
+                <tr><td colSpan={10} style={{ padding: 20, textAlign: 'center', color: '#999' }}>この期間のデータはありません</td></tr>
               )}
             </tbody>
           </table>
@@ -360,8 +387,16 @@ export default function SalesDashboardPage() {
               {/* 年間サマリー */}
               <div style={{ display: 'flex', gap: 16, marginBottom: 24 }}>
                 <div style={{ background: '#f0f7ff', borderRadius: 10, padding: '16px 24px', flex: 1 }}>
-                  <div style={{ fontSize: '0.75rem', color: '#666' }}>{selectedYear}年 合計 決済額</div>
+                  <div style={{ fontSize: '0.75rem', color: '#666' }}>{selectedYear}年 合計 決済額（トラカ）</div>
                   <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#2d6a8f' }}>{yen(yearTotalRevenueJpy)}</div>
+                </div>
+                <div style={{ background: '#fff5f0', borderRadius: 10, padding: '16px 24px', flex: 1 }}>
+                  <div style={{ fontSize: '0.75rem', color: '#666' }}>{selectedYear}年 合計 ショップ売上</div>
+                  <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#b8622d' }}>{yen(yearTotalShopRevenueJpy)}</div>
+                </div>
+                <div style={{ background: '#f0fff4', borderRadius: 10, padding: '16px 24px', flex: 1 }}>
+                  <div style={{ fontSize: '0.75rem', color: '#666' }}>{selectedYear}年 合計 総売上</div>
+                  <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#2a8f5a' }}>{yen(yearTotalCombinedRevenueJpy)}</div>
                 </div>
                 <div style={{ background: '#f5f5f5', borderRadius: 10, padding: '16px 24px', flex: 1 }}>
                   <div style={{ fontSize: '0.75rem', color: '#666' }}>{selectedYear}年 合計 トラカ消費</div>
@@ -374,21 +409,25 @@ export default function SalesDashboardPage() {
                 <thead>
                   <tr style={{ borderBottom: '2px solid #ddd', textAlign: 'right' }}>
                     <th style={{ textAlign: 'left', padding: '8px 4px' }}>月</th>
-                    <th style={{ padding: '8px 4px' }}>決済額</th>
-                    <th style={{ padding: '8px 4px', width: '30%' }}></th>
+                    <th style={{ padding: '8px 4px' }}>決済額（トラカ）</th>
+                    <th style={{ padding: '8px 4px' }}>ショップ売上</th>
+                    <th style={{ padding: '8px 4px' }}>総売上</th>
+                    <th style={{ padding: '8px 4px', width: '20%' }}></th>
                     <th style={{ padding: '8px 4px' }}>トラカ消費</th>
                   </tr>
                 </thead>
                 <tbody>
                   {monthlyMonths.map(bucket => {
                     const s = monthStat(bucket)
-                    const barWidth = Math.round((s.revenueJpy / monthlyMaxRevenue) * 100)
+                    const barWidth = Math.round((s.combinedRevenueJpy / monthlyMaxRevenue) * 100)
                     return (
                       <tr key={bucket.month} style={{ borderBottom: '1px solid #eee', textAlign: 'right' }}>
                         <td style={{ textAlign: 'left', padding: '8px 4px', fontWeight: 600 }}>
                           {parseInt(bucket.month.split('-')[1], 10)}月
                         </td>
                         <td style={{ padding: '8px 4px', whiteSpace: 'nowrap' }}>{yen(s.revenueJpy)}</td>
+                        <td style={{ padding: '8px 4px', whiteSpace: 'nowrap' }}>{yen(s.shopRevenueJpy)}</td>
+                        <td style={{ padding: '8px 4px', whiteSpace: 'nowrap', fontWeight: 700 }}>{yen(s.combinedRevenueJpy)}</td>
                         <td style={{ padding: '8px 4px' }}>
                           <div style={{ background: '#e8f2fa', borderRadius: 4, height: 10, width: '100%' }}>
                             <div style={{
@@ -405,14 +444,15 @@ export default function SalesDashboardPage() {
               </table>
 
               <p style={{ fontSize: '0.75rem', color: '#999', marginTop: 16 }}>
-                ※決済額は今後の購入分から記録されるようになったため、それ以前の月は0円表示になります。
+                ※決済額（トラカ）は今後の購入分から記録されるようになったため、それ以前の月は0円表示になります。<br />
+                ※ショップ売上は支払い済み（発送待ち・発送済み）の注文のみを、支払い確定日で集計しています。
               </p>
 
               {/* 振込精算（月末締め・決済額の5%） */}
               <h2 style={{ fontSize: '1.1rem', fontWeight: 700, marginTop: 36, marginBottom: 4 }}>振込精算</h2>
               <p style={{ fontSize: '0.75rem', color: '#999', marginBottom: 16 }}>
-                月末締め。雲龍蓮・架月ちゃんは決済額の5%を翌月10日までに青空花林へ、
-                青空花林は全員合計の決済額の5%を翌月15日までに虎へ振り込む想定の計算です。
+                月末締め。雲龍蓮・架月ちゃんは総売上（トラカ決済額＋ショップ売上）の5%を翌月10日までに青空花林へ、
+                青空花林は全員合計の総売上の5%を翌月15日までに虎へ振り込む想定の計算です。
               </p>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                 <thead>
@@ -429,7 +469,7 @@ export default function SalesDashboardPage() {
                   {monthlyMonths.map(bucket => {
                     const ryuTransfer = Math.round(getTeacherRevenue(bucket, RYU_TEACHER_ID) * SHARE_RATE)
                     const tsukiTransfer = Math.round(getTeacherRevenue(bucket, TSUKI_TEACHER_ID) * SHARE_RATE)
-                    const toraTransfer = Math.round(bucket.totalRevenueJpy * SHARE_RATE)
+                    const toraTransfer = Math.round((bucket.totalRevenueJpy + bucket.totalShopRevenueJpy) * SHARE_RATE)
                     const dueToYou = formatDate(nextMonthDate(bucket.month, 10))
                     const dueToTora = formatDate(nextMonthDate(bucket.month, 15))
                     const isAllZero = ryuTransfer === 0 && tsukiTransfer === 0 && toraTransfer === 0
