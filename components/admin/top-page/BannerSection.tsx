@@ -145,6 +145,8 @@ export function BannerSection() {
         </h3>
         <p className="text-xs text-gray-500 mb-3">
           サイト最上部に表示するメインバナー（1枚）
+          <br />
+          推奨サイズ：2048×768px（横長・同サイズならレイアウト崩れなし）
         </p>
         <div className="flex items-start gap-4">
           {topBanner && (
@@ -177,6 +179,8 @@ export function BannerSection() {
         </h3>
         <p className="text-xs text-gray-500 mb-3">
           サイト内で順番に切り替わるバナー（複数登録可）
+          <br />
+          推奨サイズ：2048×768px（トップバナーと同サイズ）
         </p>
         <div className="space-y-3">
           {carouselBanners.map((banner, index) => (
