@@ -1,79 +1,162 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
-import { createClient } from '@/lib/supabaseClient';
+import { useState } from "react";
 
-const TEACHER_IDS: Record<string, string> = {
-  ryu: '3ba85bb9-9065-461b-b76b-cc488d4c0c3b',
-  tsuki: '17cf0ca1-7526-466e-a644-9d3efefa4091',
-  hana: 'cd2c4101-2e24-4ae2-8d6a-507a943904af',
-};
-const TEACHER_NAMES: Record<string, string> = { ryu: '雲龍蓮', tsuki: '椎名架月', hana: '青空花林' };
+const SITE_URL = "https://ryugekka.vercel.app";
 
-interface BlogRow {
+const TEACHERS = [
+  { key: "ryu", name: "龍（雲龍蓮）" },
+  { key: "tsuki", name: "月（椎名架月）" },
+  { key: "hana", name: "花（青空花林）" },
+] as const;
+
+type WidgetDef = {
   id: string;
-  title: string;
-  created_at: string;
+  label: string;
+  description: string;
+  needsTeacher: boolean;
+  path: (teacherKey: string) => string;
+  width: number;
+  height: number;
+};
+
+const WIDGETS: WidgetDef[] = [
+  {
+    id: "news",
+    label: "News（What's New）",
+    description: "サイト全体のお知らせ最新20件を表示（先生共通・1つだけ）",
+    needsTeacher: false,
+    path: () => "/embed/news",
+    width: 400,
+    height: 420,
+  },
+  {
+    id: "profile",
+    label: "プロフィール画像",
+    description: "先生のアイコン画像と名前のみのシンプル表示",
+    needsTeacher: true,
+    path: (k) => `/embed/profile/${k}`,
+    width: 200,
+    height: 220,
+  },
+  {
+    id: "teacher-card",
+    label: "占い師カード",
+    description: "トップページの3人ボックスと同じ、写真・評価・料金・CTA付きカード",
+    needsTeacher: true,
+    path: (k) => `/embed/teacher-card/${k}`,
+    width: 320,
+    height: 460,
+  },
+  {
+    id: "reviews",
+    label: "口コミ",
+    description: "ベストレビュー1件＋最新3件を表示",
+    needsTeacher: true,
+    path: (k) => `/embed/reviews/${k}`,
+    width: 400,
+    height: 420,
+  },
+  {
+    id: "whisper",
+    label: "つぶやき",
+    description: "最新のつぶやき1件を表示",
+    needsTeacher: true,
+    path: (k) => `/embed/whisper/${k}`,
+    width: 400,
+    height: 140,
+  },
+  {
+    id: "blog",
+    label: "ブログ",
+    description: "最新のブログ記事3件＋一覧へのリンクを表示",
+    needsTeacher: true,
+    path: (k) => `/embed/blog/${k}`,
+    width: 400,
+    height: 280,
+  },
+];
+
+function buildIframeTag(src: string, width: number, height: number) {
+  return `<iframe src="${src}" width="${width}" height="${height}" style="border:none;" loading="lazy"></iframe>`;
 }
 
-function formatShortDate(dateStr: string) {
-  const d = new Date(dateStr);
-  return `${d.getMonth() + 1}/${d.getDate()}`;
-}
+export default function WidgetsPage() {
+  const [teacherByWidget, setTeacherByWidget] = useState<Record<string, string>>(
+    Object.fromEntries(WIDGETS.filter((w) => w.needsTeacher).map((w) => [w.id, "ryu"]))
+  );
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
-export default function EmbedBlogWidget() {
-  const supabase = createClient();
-  const params = useParams();
-  const key = params?.teacherKey as string;
-  const [posts, setPosts] = useState<BlogRow[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const teacherId = TEACHER_IDS[key];
-    if (!teacherId) { setLoading(false); return; }
-    supabase
-      .from('blog_posts')
-      .select('id, title, created_at')
-      .eq('teacher_id', teacherId)
-      .eq('status', 'published')
-      .order('published_at', { ascending: false })
-      .limit(3)
-      .then(({ data }) => { setPosts((data as BlogRow[]) ?? []); setLoading(false); });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
-
-  const name = TEACHER_NAMES[key];
-  if (!name) return null;
+  const handleCopy = async (id: string, text: string) => {
+    await navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
 
   return (
-    <div className="ebw">
-      <style>{`
-        .ebw{
-          --gold:#d8b878; --gold-bright:#f3d99a; --text:#ece8dd; --text-dim:#b9b3a4; --panel:rgba(8,11,22,0.72);
-          font-family:"Noto Sans JP", sans-serif; background:#05060d; color:var(--text); padding:4px;
-        }
-        .ebw-frame{background:var(--panel); border:1px solid rgba(216,184,120,0.25); border-radius:6px; padding:20px 22px 16px;}
-        .ebw-frame h3{font-family:"Shippori Mincho",serif; font-size:15px; letter-spacing:0.1em; color:var(--gold); margin-bottom:12px; padding-bottom:8px; border-bottom:1px solid rgba(216,184,120,0.22); display:flex; justify-content:space-between; align-items:center;}
-        .ebw-frame h3 a{font-family:"Noto Sans JP",sans-serif; font-size:11px; letter-spacing:0.04em; color:var(--gold-bright); font-weight:400; text-decoration:none;}
-        .ebw-item{display:flex; justify-content:space-between; gap:16px; font-size:13px; color:var(--text-dim); padding:10px 0; border-bottom:1px dashed rgba(255,255,255,0.08); text-decoration:none;}
-        .ebw-item:hover{color:var(--text);}
-        .ebw-item .d{font-size:11px; color:var(--text-dim); flex-shrink:0;}
-        .ebw-empty{font-size:13px; color:var(--text-dim);}
-      `}</style>
-      <div className="ebw-frame">
-        <h3>
-          <span>{name}のブログ</span>
-          <a href={`https://ryugekka.vercel.app/blog/${key}`} target="_blank" rel="noopener noreferrer">一覧を見る →</a>
-        </h3>
-        {loading && <div className="ebw-empty">読み込み中...</div>}
-        {!loading && posts.length === 0 && <div className="ebw-empty">まだブログ記事がありません</div>}
-        {posts.map(p => (
-          <a className="ebw-item" key={p.id} href={`https://ryugekka.vercel.app/blog/${key}`} target="_blank" rel="noopener noreferrer">
-            <span>{p.title}</span>
-            <span className="d">{formatShortDate(p.created_at)}</span>
-          </a>
-        ))}
+    <div className="max-w-3xl mx-auto px-6 py-8">
+      <h1 className="text-xl font-bold text-gray-800 mb-1">ウィジェット</h1>
+      <p className="text-sm text-gray-500 mb-6">
+        LP（ランディングページ）などの外部サイトに埋め込める、龍月花のウィジェットです。
+        下の埋め込みタグをコピーして、iframeとして貼り付けてください。
+      </p>
+
+      <div className="space-y-6">
+        {WIDGETS.map((w) => {
+          const teacherKey = teacherByWidget[w.id] ?? "ryu";
+          const src = `${SITE_URL}${w.path(teacherKey)}`;
+          const tag = buildIframeTag(src, w.width, w.height);
+          return (
+            <div key={w.id} className="border border-gray-200 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-1">
+                <h2 className="text-base font-semibold text-gray-800">{w.label}</h2>
+                {w.needsTeacher && (
+                  <select
+                    value={teacherKey}
+                    onChange={(e) =>
+                      setTeacherByWidget((prev) => ({ ...prev, [w.id]: e.target.value }))
+                    }
+                    className="text-sm border border-gray-300 rounded px-2 py-1"
+                  >
+                    {TEACHERS.map((t) => (
+                      <option key={t.key} value={t.key}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+              <p className="text-xs text-gray-500 mb-3">{w.description}</p>
+              <p className="text-xs text-gray-400 mb-2">
+                推奨サイズ：{w.width}×{w.height}px（幅は自由に調整可）
+              </p>
+              <div className="flex items-start gap-2">
+                <textarea
+                  readOnly
+                  value={tag}
+                  rows={2}
+                  className="flex-1 text-xs font-mono border border-gray-300 rounded px-2 py-1.5 bg-gray-50 resize-none"
+                  onFocus={(e) => e.target.select()}
+                />
+                <button
+                  type="button"
+                  onClick={() => handleCopy(w.id, tag)}
+                  className="shrink-0 text-xs bg-teal-500 hover:bg-teal-600 text-white px-3 py-1.5 rounded"
+                >
+                  {copiedId === w.id ? "コピーしました" : "コピー"}
+                </button>
+              </div>
+              <a
+                href={src}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block mt-2 text-xs text-blue-600 hover:text-blue-800"
+              >
+                プレビューを開く →
+              </a>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
