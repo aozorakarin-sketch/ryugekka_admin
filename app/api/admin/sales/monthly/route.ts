@@ -20,6 +20,8 @@ const supabaseAdmin = createClient(
 interface MonthBucket {
   month: string // 'YYYY-MM'
   totalRevenueJpy: number
+  totalShopRevenueJpy: number
+  combinedRevenueJpy: number
   totalPointsUsed: number
   teachers: TeacherStat[]
 }
@@ -57,6 +59,16 @@ export async function GET(req: NextRequest) {
 
     if (consumeError) throw consumeError
 
+    // ③ ショップ売上（円）: 支払い済み（paid/shipped）のみ、その年の全件（paid_at基準）
+    const { data: shopRows, error: shopError } = await supabaseAdmin
+      .from('shop_orders')
+      .select('teacher_id, total_price, paid_at')
+      .in('status', ['paid', 'shipped'])
+      .gte('paid_at', yearStart)
+      .lt('paid_at', yearEnd)
+
+    if (shopError) throw shopError
+
     // 月ごとの集計器を用意（1〜12月ぶん先に作っておく。データが無い月も0件として返すため）
     const monthBuckets = new Map<string, ReturnType<typeof createStatsMap>>()
     for (let m = 1; m <= 12; m++) {
@@ -93,11 +105,27 @@ export async function GET(req: NextRequest) {
       stat.pointsUsed.total += used
     }
 
+    // ショップ売上を月ごと・先生ごとに集計
+    for (const row of shopRows ?? []) {
+      if (!row.teacher_id || !row.paid_at) continue
+      const bucket = monthBuckets.get(monthKeyOf(row.paid_at))
+      if (!bucket) continue
+      const stat = bucket.ensure(row.teacher_id)
+      stat.shopRevenueJpy += row.total_price ?? 0
+      stat.shopOrderCount += 1
+    }
+
     const months: MonthBucket[] = Array.from(monthBuckets.entries()).map(([monthKey, bucket]) => {
-      const teachers = Array.from(bucket.stats.values()).sort((a, b) => b.revenueJpy - a.revenueJpy)
+      const teachers = Array.from(bucket.stats.values()).sort(
+        (a, b) => (b.revenueJpy + b.shopRevenueJpy) - (a.revenueJpy + a.shopRevenueJpy)
+      )
+      const totalRevenueJpy = teachers.reduce((sum, t) => sum + t.revenueJpy, 0)
+      const totalShopRevenueJpy = teachers.reduce((sum, t) => sum + t.shopRevenueJpy, 0)
       return {
         month: monthKey,
-        totalRevenueJpy: teachers.reduce((sum, t) => sum + t.revenueJpy, 0),
+        totalRevenueJpy,
+        totalShopRevenueJpy,
+        combinedRevenueJpy: totalRevenueJpy + totalShopRevenueJpy,
         totalPointsUsed: teachers.reduce((sum, t) => sum + t.pointsUsed.total, 0),
         teachers,
       }

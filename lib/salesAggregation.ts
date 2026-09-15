@@ -37,6 +37,8 @@ export interface TeacherStat {
   revenueJpyUnknownCount: number
   purchaseCount: number
   pointsUsed: { call: number; chat: number; mail: number; other: number; total: number }
+  shopRevenueJpy: number
+  shopOrderCount: number
 }
 
 export function createStatsMap() {
@@ -50,6 +52,8 @@ export function createStatsMap() {
         revenueJpyUnknownCount: 0,
         purchaseCount: 0,
         pointsUsed: { call: 0, chat: 0, mail: 0, other: 0, total: 0 },
+        shopRevenueJpy: 0,
+        shopOrderCount: 0,
       })
     }
     return stats.get(teacherId)!

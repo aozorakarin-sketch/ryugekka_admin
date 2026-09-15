@@ -2,6 +2,7 @@
 // 先生全員が閲覧できる売上ダッシュボード用の集計API（期間自由指定・単一合計）。
 // - 決済額（円）: point_transactions.amount_jpy（purchase・今後分のみ正しく入る）
 // - トラカ消費実績: point_transactions（consume）を reason文字列でチャンネル分類して集計
+// - ショップ売上（円）: shop_orders.total_price（status='paid'/'shipped'、paid_atで期間判定）
 //
 // 月ごとの推移を見たい場合は /api/admin/sales/monthly を使う
 
@@ -55,6 +56,16 @@ export async function GET(req: NextRequest) {
 
     if (consumeError) throw consumeError
 
+    // ③ ショップ売上（円）: 支払い済み（paid/shipped）のみ、paid_atで期間判定
+    const { data: shopRows, error: shopError } = await supabaseAdmin
+      .from('shop_orders')
+      .select('teacher_id, total_price')
+      .in('status', ['paid', 'shipped'])
+      .gte('paid_at', from)
+      .lt('paid_at', to)
+
+    if (shopError) throw shopError
+
     const { stats, ensure } = createStatsMap()
 
     // 決済額を集計
@@ -80,14 +91,27 @@ export async function GET(req: NextRequest) {
       stat.pointsUsed.total += used
     }
 
-    const teachers = Array.from(stats.values()).sort((a, b) => b.revenueJpy - a.revenueJpy)
+    // ショップ売上を集計
+    for (const row of shopRows ?? []) {
+      if (!row.teacher_id) continue
+      const stat = ensure(row.teacher_id)
+      stat.shopRevenueJpy += row.total_price ?? 0
+      stat.shopOrderCount += 1
+    }
+
+    const teachers = Array.from(stats.values()).sort(
+      (a, b) => (b.revenueJpy + b.shopRevenueJpy) - (a.revenueJpy + a.shopRevenueJpy)
+    )
 
     const totalRevenueJpy = teachers.reduce((sum, t) => sum + t.revenueJpy, 0)
+    const totalShopRevenueJpy = teachers.reduce((sum, t) => sum + t.shopRevenueJpy, 0)
     const totalPointsUsed = teachers.reduce((sum, t) => sum + t.pointsUsed.total, 0)
 
     return NextResponse.json({
       period: { from, to },
       totalRevenueJpy,
+      totalShopRevenueJpy,
+      combinedRevenueJpy: totalRevenueJpy + totalShopRevenueJpy,
       totalPointsUsed,
       teachers,
     })
