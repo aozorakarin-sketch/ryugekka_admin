@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { teacher_id, name, description, price, image_url, stock, product_type, digital_video_url } = body;
+  const { teacher_id, name, description, price, image_url, stock, product_type, digital_video_url, digital_file_path, digital_file_name } = body;
   if (!teacher_id || !name || price == null) {
     return NextResponse.json({ error: 'パラメータが不足しています' }, { status: 400 });
   }
@@ -32,6 +32,8 @@ export async function POST(req: NextRequest) {
       stock: stock ?? 0,
       product_type: product_type ?? 'physical',
       digital_video_url: digital_video_url ?? null,
+      digital_file_path: digital_file_path ?? null,
+      digital_file_name: digital_file_name ?? null,
     })
     .select()
     .single();

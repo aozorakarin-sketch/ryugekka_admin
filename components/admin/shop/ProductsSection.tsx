@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
-type ProductType = "physical" | "digital_video";
+type ProductType = "physical" | "digital_video" | "digital_file";
 
 type Product = {
   id: string;
@@ -16,6 +16,8 @@ type Product = {
   is_active: boolean;
   product_type: ProductType;
   digital_video_url: string | null;
+  digital_file_path: string | null;
+  digital_file_name: string | null;
 };
 
 async function uploadImage(file: File): Promise<string> {
@@ -26,6 +28,16 @@ async function uploadImage(file: File): Promise<string> {
   if (error) throw error;
   const { data } = supabase.storage.from("shop").getPublicUrl(path);
   return data.publicUrl;
+}
+
+// 非公開バケットにアップロード。公開URLは発行せず、Storage内のパスだけを保存する
+// （実際の配信は購入確認後にサーバー側でcreateSignedUrlする）
+async function uploadDigitalFile(file: File): Promise<{ path: string; name: string }> {
+  const ext = file.name.split(".").pop();
+  const path = `files/${crypto.randomUUID()}.${ext}`;
+  const { error } = await supabase.storage.from("shop-digital").upload(path, file);
+  if (error) throw error;
+  return { path, name: file.name };
 }
 
 // デジタル商品は在庫の概念がないため、内部的にはこの数値を入れておく（一覧ページで「売り切れ」表示にならないようにするため）
@@ -45,9 +57,14 @@ export function ProductsSection({ teacherId, canEdit }: { teacherId: string; can
   const [stock, setStock] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [digitalVideoUrl, setDigitalVideoUrl] = useState("");
+  const [digitalFilePath, setDigitalFilePath] = useState("");
+  const [digitalFileName, setDigitalFileName] = useState("");
+  const [fileUploading, setFileUploading] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const isDigital = productType === "digital_video";
+  const isDigitalVideo = productType === "digital_video";
+  const isDigitalFile = productType === "digital_file";
+  const isDigital = isDigitalVideo || isDigitalFile;
 
   const load = async () => {
     setLoading(true);
@@ -68,6 +85,8 @@ export function ProductsSection({ teacherId, canEdit }: { teacherId: string; can
     setStock("");
     setImageUrl("");
     setDigitalVideoUrl("");
+    setDigitalFilePath("");
+    setDigitalFileName("");
     setShowModal(true);
   };
 
@@ -80,6 +99,8 @@ export function ProductsSection({ teacherId, canEdit }: { teacherId: string; can
     setStock(String(p.stock));
     setImageUrl(p.image_url ?? "");
     setDigitalVideoUrl(p.digital_video_url ?? "");
+    setDigitalFilePath(p.digital_file_path ?? "");
+    setDigitalFileName(p.digital_file_name ?? "");
     setShowModal(true);
   };
 
@@ -96,9 +117,24 @@ export function ProductsSection({ teacherId, canEdit }: { teacherId: string; can
     }
   };
 
+  const handleDigitalFileUpload = async (file: File) => {
+    setFileUploading(true);
+    try {
+      const { path, name: fname } = await uploadDigitalFile(file);
+      setDigitalFilePath(path);
+      setDigitalFileName(fname);
+    } catch (err) {
+      console.error('ファイルアップロードエラー:', err);
+      alert('ファイルのアップロードに失敗しました。Supabase Storageに「shop-digital」バケットが作成されているか確認してください。');
+    } finally {
+      setFileUploading(false);
+    }
+  };
+
   const save = async () => {
     if (!name.trim() || !price) { alert("商品名と価格を入力してください"); return; }
-    if (isDigital && !digitalVideoUrl.trim()) { alert("動画のURLを入力してください"); return; }
+    if (isDigitalVideo && !digitalVideoUrl.trim()) { alert("動画のURLを入力してください"); return; }
+    if (isDigitalFile && !digitalFilePath) { alert("ファイルをアップロードしてください"); return; }
     setSaving(true);
     const payload = {
       teacher_id: teacherId,
@@ -108,7 +144,9 @@ export function ProductsSection({ teacherId, canEdit }: { teacherId: string; can
       stock: isDigital ? UNLIMITED_STOCK : Number(stock || 0),
       image_url: imageUrl || null,
       product_type: productType,
-      digital_video_url: isDigital ? digitalVideoUrl.trim() : null,
+      digital_video_url: isDigitalVideo ? digitalVideoUrl.trim() : null,
+      digital_file_path: isDigitalFile ? digitalFilePath : null,
+      digital_file_name: isDigitalFile ? digitalFileName : null,
     };
     if (editTarget) {
       await fetch("/api/admin/shop/products", {
@@ -167,9 +205,14 @@ export function ProductsSection({ teacherId, canEdit }: { teacherId: string; can
                   📹 動画
                 </span>
               )}
+              {p.product_type === "digital_file" && (
+                <span className="inline-block text-[10px] font-bold text-white bg-indigo-500 px-2 py-0.5 rounded-full mb-1">
+                  📄 ファイル
+                </span>
+              )}
               <p className="text-sm font-medium text-gray-800 truncate">{p.name}</p>
               <p className="text-sm text-gray-600">¥{p.price.toLocaleString()}</p>
-              {p.product_type === "digital_video" ? (
+              {p.product_type !== "physical" ? (
                 <p className="text-xs text-gray-400">在庫制限なし</p>
               ) : (
                 <p className={`text-xs ${p.stock === 0 ? "text-red-500" : "text-gray-500"}`}>
@@ -204,16 +247,23 @@ export function ProductsSection({ teacherId, canEdit }: { teacherId: string; can
                 <button
                   type="button"
                   onClick={() => setProductType("physical")}
-                  className={`flex-1 text-sm px-3 py-2 rounded border ${productType === "physical" ? "bg-teal-500 text-white border-teal-500" : "bg-white text-gray-600 border-gray-300"}`}
+                  className={`flex-1 text-sm px-2 py-2 rounded border ${productType === "physical" ? "bg-teal-500 text-white border-teal-500" : "bg-white text-gray-600 border-gray-300"}`}
                 >
-                  📦 物販（配送あり）
+                  📦 物販
                 </button>
                 <button
                   type="button"
                   onClick={() => setProductType("digital_video")}
-                  className={`flex-1 text-sm px-3 py-2 rounded border ${productType === "digital_video" ? "bg-purple-500 text-white border-purple-500" : "bg-white text-gray-600 border-gray-300"}`}
+                  className={`flex-1 text-sm px-2 py-2 rounded border ${productType === "digital_video" ? "bg-purple-500 text-white border-purple-500" : "bg-white text-gray-600 border-gray-300"}`}
                 >
-                  📹 動画配信
+                  📹 動画
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setProductType("digital_file")}
+                  className={`flex-1 text-sm px-2 py-2 rounded border ${productType === "digital_file" ? "bg-indigo-500 text-white border-indigo-500" : "bg-white text-gray-600 border-gray-300"}`}
+                >
+                  📄 ファイル
                 </button>
               </div>
             </div>
@@ -235,7 +285,7 @@ export function ProductsSection({ teacherId, canEdit }: { teacherId: string; can
             <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="商品説明"
               rows={3} className="w-full border rounded px-3 py-2 text-sm mb-3" />
 
-            {isDigital ? (
+            {isDigitalVideo && (
               <div className="mb-3">
                 <label className="text-xs text-gray-500 block mb-1">動画URL（YouTube限定公開など）</label>
                 <input type="text" value={digitalVideoUrl} onChange={e => setDigitalVideoUrl(e.target.value)}
@@ -243,7 +293,24 @@ export function ProductsSection({ teacherId, canEdit }: { teacherId: string; can
                   className="w-full border rounded px-3 py-2 text-sm" />
                 <p className="text-[11px] text-gray-400 mt-1">購入者にのみ、購入完了画面から表示されます</p>
               </div>
-            ) : null}
+            )}
+
+            {isDigitalFile && (
+              <div className="mb-3">
+                <label className="text-xs text-gray-500 block mb-1">配布ファイル（PDF・MP3など）</label>
+                <div className="flex items-center gap-3">
+                  {digitalFileName && (
+                    <span className="text-xs text-gray-700 bg-gray-100 px-2 py-1 rounded truncate max-w-[160px]">{digitalFileName}</span>
+                  )}
+                  <label className="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-2 rounded cursor-pointer">
+                    {fileUploading ? "アップロード中..." : digitalFileName ? "差し替える" : "ファイルを選択"}
+                    <input type="file" className="hidden" disabled={fileUploading}
+                      onChange={(e) => { const f = e.target.files?.[0]; if (f) handleDigitalFileUpload(f); }} />
+                  </label>
+                </div>
+                <p className="text-[11px] text-gray-400 mt-1">購入確認後、期限付きのダウンロードURLが購入者に発行されます</p>
+              </div>
+            )}
 
             <div className="flex gap-3 mb-4">
               <div className="flex-1">
