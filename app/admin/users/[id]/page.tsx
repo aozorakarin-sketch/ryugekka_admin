@@ -115,6 +115,11 @@ export default function UserTeacherListPage() {
       return
     }
     setBlockedTeachers(prev => ({ ...prev, [teacherId]: "teacher" }))
+
+    // 運営への通知（失敗してもブロック自体は成立済みなので、ここはベストエフォート）
+    supabase.functions.invoke("notify-teacher-block", {
+      body: { teacher_id: teacherId, user_id: id },
+    }).catch(() => {})
   }
 
   const formatDate = (s: string | null) => {
