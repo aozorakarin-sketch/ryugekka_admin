@@ -1,26 +1,27 @@
 'use client'
 import { useState } from 'react'
 
-type PointType = 'ryu' | 'tsuki' | 'hana'
+type PointType = 'common' | 'ryu' | 'tsuki' | 'hana'
 
 interface User {
   id: string
   name: string
   email: string
-  balance: { ryu: number; tsuki: number; hana: number }
+  balance: { common: number; ryu: number; tsuki: number; hana: number }
 }
 
 const POINT_CONFIG: Record<PointType, { label: string; emoji: string }> = {
-  ryu:   { label: '龍ポイント', emoji: '🐉' },
-  tsuki: { label: '月ポイント', emoji: '🌙' },
-  hana:  { label: '花ポイント', emoji: '🌸' },
+  common: { label: '共通トラカ', emoji: '✨' },
+  ryu:    { label: '龍ポイント', emoji: '🐉' },
+  tsuki:  { label: '月ポイント', emoji: '🌙' },
+  hana:   { label: '花ポイント', emoji: '🌸' },
 }
 
 export default function AdminPointsPage() {
   const [query, setQuery] = useState('')
   const [users, setUsers] = useState<User[]>([])
   const [selected, setSelected] = useState<User | null>(null)
-  const [pointType, setPointType] = useState<PointType>('hana')
+  const [pointType, setPointType] = useState<PointType>('common')
   const [amount, setAmount] = useState('')
   const [reason, setReason] = useState('')
   const [loading, setLoading] = useState(false)
@@ -131,7 +132,8 @@ export default function AdminPointsPage() {
         <div className="bg-purple-50 rounded-xl p-4 border border-purple-100">
           <p className="font-semibold text-sm">✅ {selected.name}</p>
           <p className="text-xs text-gray-400">{selected.email}</p>
-          <div className="flex gap-4 mt-2 text-sm">
+          <div className="flex gap-4 mt-2 text-sm flex-wrap">
+            <span className="text-amber-600">✨ {selected.balance.common.toLocaleString()}pt</span>
             <span className="text-purple-600">🐉 {selected.balance.ryu.toLocaleString()}pt</span>
             <span className="text-yellow-600">🌙 {selected.balance.tsuki.toLocaleString()}pt</span>
             <span className="text-pink-600">🌸 {selected.balance.hana.toLocaleString()}pt</span>
@@ -142,8 +144,8 @@ export default function AdminPointsPage() {
       {/* ポイント種別 */}
       <div>
         <label className="block text-sm font-medium mb-1">ポイント種別</label>
-        <div className="flex gap-2">
-          {(['ryu', 'tsuki', 'hana'] as PointType[]).map(pt => (
+        <div className="flex gap-2 flex-wrap">
+          {(['common', 'hana', 'tsuki', 'ryu'] as PointType[]).map(pt => (
             <button
               key={pt}
               onClick={() => setPointType(pt)}

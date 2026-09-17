@@ -37,18 +37,27 @@ export async function GET(req: NextRequest) {
     }))
 
   const userIds = filtered.map(u => u.id)
+
   const { data: points } = await supabase
     .from('user_points')
     .select('user_id, teacher_id, points')
     .in('user_id', userIds)
 
+  // ★共通トラカ（user_common_points）も合わせて取得する
+  const { data: commonPoints } = await supabase
+    .from('user_common_points')
+    .select('user_id, points')
+    .in('user_id', userIds)
+
   const usersWithPoints = filtered.map(u => {
     const userPoints = points?.filter(p => p.user_id === u.id) || []
-    const balance = { ryu: 0, tsuki: 0, hana: 0 }
+    const balance = { ryu: 0, tsuki: 0, hana: 0, common: 0 }
     userPoints.forEach(p => {
       const type = TEACHERS[p.teacher_id]
       if (type) balance[type] = p.points
     })
+    const commonRow = commonPoints?.find(c => c.user_id === u.id)
+    if (commonRow) balance.common = commonRow.points
     return { ...u, balance }
   })
 

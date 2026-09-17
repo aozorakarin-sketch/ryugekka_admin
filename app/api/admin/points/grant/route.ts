@@ -20,8 +20,57 @@ export async function POST(req: NextRequest) {
     if (!user_id || !point_type || !amount) {
       return NextResponse.json({ error: 'user_id, point_type, amount は必須' }, { status: 400 })
     }
-    if (!['ryu', 'tsuki', 'hana'].includes(point_type)) {
-      return NextResponse.json({ error: 'point_type は ryu / tsuki / hana のいずれか' }, { status: 400 })
+    if (!['ryu', 'tsuki', 'hana', 'common'].includes(point_type)) {
+      return NextResponse.json({ error: 'point_type は ryu / tsuki / hana / common のいずれか' }, { status: 400 })
+    }
+
+    // ★共通トラカ（user_common_points）は先生別テーブルとは別扱い。
+    //   このテーブルにはid列が無いため、user_idで行を特定する。
+    if (point_type === 'common') {
+      const { data: current } = await supabase
+        .from('user_common_points')
+        .select('points')
+        .eq('user_id', user_id)
+        .maybeSingle()
+
+      const currentPoints = current?.points ?? 0
+      const newPoints = currentPoints + amount
+
+      if (newPoints < 0) {
+        return NextResponse.json(
+          { error: `残高不足（現在: ${currentPoints}pt）` },
+          { status: 400 }
+        )
+      }
+
+      if (current) {
+        await supabase
+          .from('user_common_points')
+          .update({ points: newPoints, updated_at: new Date().toISOString() })
+          .eq('user_id', user_id)
+      } else {
+        await supabase
+          .from('user_common_points')
+          .insert({ user_id, points: newPoints, updated_at: new Date().toISOString() })
+      }
+
+      // 履歴記録：共通トラカはpoint_type='trk'として記録する（他の付与処理と揃える）
+      await supabase.from('point_transactions').insert({
+        user_id,
+        point_type: 'trk',
+        amount,
+        balance_after: newPoints,
+        transaction_type: amount > 0 ? 'manual_grant' : 'manual_deduct',
+        reason: reason || '管理者による手動操作',
+      })
+
+      return NextResponse.json({
+        success: true,
+        point_type,
+        previous: currentPoints,
+        granted: amount,
+        balance: newPoints,
+      })
     }
 
     const teacher_id = TEACHER_IDS[point_type as keyof typeof TEACHER_IDS]
