@@ -30,6 +30,9 @@ export default function UserTeacherListPage() {
   const [handleName, setHandleName] = useState("")
   const [rows, setRows] = useState<TeacherRow[]>([])
   const [loading, setLoading] = useState(true)
+  // teacher_id -> 'teacher' | 'customer'（先生からブロック済み／お客さんからブロック済み）
+  const [blockedTeachers, setBlockedTeachers] = useState<Record<string, 'teacher' | 'customer'>>({})
+  const [blockingId, setBlockingId] = useState<string | null>(null)
 
   useEffect(() => {
     fetchData()
@@ -75,7 +78,43 @@ export default function UserTeacherListPage() {
     })
 
     setRows(result)
+
+    // このお客さんに関するブロック行を取得
+    const { data: blocks } = await supabase
+      .from("teacher_customer_blocks")
+      .select("teacher_id, blocked_by")
+      .eq("user_id", id)
+    const bMap: Record<string, 'teacher' | 'customer'> = {}
+    for (const b of blocks ?? []) {
+      bMap[b.teacher_id] = b.blocked_by
+    }
+    setBlockedTeachers(bMap)
+
     setLoading(false)
+  }
+
+  const handleBlock = async (teacherId: string, teacherName: string) => {
+    const ok = window.confirm(
+      `${teacherName}として、${handleName}さんをブロックします。\n\n` +
+      `・ブロックは一切解除できません\n` +
+      `・残りのトラカは返金対応（運営から振込先を確認します）\n\n` +
+      `本当にブロックしますか？`
+    )
+    if (!ok) return
+
+    setBlockingId(teacherId)
+    const { error } = await supabase.from("teacher_customer_blocks").insert({
+      teacher_id: teacherId,
+      user_id: id,
+      blocked_by: "teacher",
+    })
+    setBlockingId(null)
+
+    if (error) {
+      alert(`ブロックに失敗しました: ${error.message}`)
+      return
+    }
+    setBlockedTeachers(prev => ({ ...prev, [teacherId]: "teacher" }))
   }
 
   const formatDate = (s: string | null) => {
@@ -103,17 +142,20 @@ export default function UserTeacherListPage() {
               <th className="text-left px-4 py-3 font-medium">最終鑑定日</th>
               <th className="text-center px-4 py-3 font-medium">鑑定履歴</th>
               <th className="text-center px-4 py-3 font-medium">ユーザー詳細</th>
+              <th className="text-center px-4 py-3 font-medium">ブロック</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-gray-400">
+                <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
                   鑑定履歴がありません
                 </td>
               </tr>
             ) : (
-              rows.map((row, i) => (
+              rows.map((row, i) => {
+                const blockStatus = blockedTeachers[row.teacher_id]
+                return (
                 <tr key={row.teacher_id} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                   <td className="px-4 py-3 font-medium">{row.teacher_name}</td>
                   <td className="px-4 py-3 text-center">
@@ -146,8 +188,24 @@ export default function UserTeacherListPage() {
                       <span className="text-xs text-gray-400">-</span>
                     )}
                   </td>
+                  <td className="px-4 py-3 text-center">
+                    {blockStatus === 'teacher' ? (
+                      <span className="text-xs text-gray-400">ブロック済み</span>
+                    ) : blockStatus === 'customer' ? (
+                      <span className="text-xs text-gray-400">お客様がブロック中</span>
+                    ) : (
+                      <button
+                        onClick={() => handleBlock(row.teacher_id, row.teacher_name)}
+                        disabled={blockingId === row.teacher_id}
+                        className="text-xs bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded disabled:opacity-50"
+                      >
+                        {blockingId === row.teacher_id ? '処理中...' : 'ブロック'}
+                      </button>
+                    )}
+                  </td>
                 </tr>
-              ))
+                )
+              })
             )}
           </tbody>
         </table>
