@@ -29,6 +29,8 @@ type Menu = {
   is_active: boolean;
 };
 
+type LpImage = { id: string; image_url: string; display_order: number };
+
 type KeyInfo = { key_prefix: string; created_at: string; rotated_at: string | null } | null;
 
 type FormState = {
@@ -58,9 +60,9 @@ async function adminFetch(url: string, init: RequestInit = {}) {
   });
 }
 
-async function uploadImage(file: File): Promise<string> {
+async function uploadImage(file: File, prefix = "premium-menu"): Promise<string> {
   const ext = file.name.split(".").pop();
-  const path = `premium-menu/${crypto.randomUUID()}.${ext}`;
+  const path = `${prefix}/${crypto.randomUUID()}.${ext}`;
   const { error } = await supabase.storage.from("top-page").upload(path, file);
   if (error) throw error;
   const { data } = supabase.storage.from("top-page").getPublicUrl(path);
@@ -113,6 +115,8 @@ export default function PremiumMenusPage() {
 
 function TeacherPanel({ teacher, canEdit }: { teacher: Teacher; canEdit: boolean }) {
   const [menus, setMenus] = useState<Menu[]>([]);
+  const [lpImages, setLpImages] = useState<LpImage[]>([]);
+  const [lpUploading, setLpUploading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [keyInfo, setKeyInfo] = useState<KeyInfo>(null);
   const [newKey, setNewKey] = useState<string | null>(null);
@@ -125,14 +129,17 @@ function TeacherPanel({ teacher, canEdit }: { teacher: Teacher; canEdit: boolean
 
   const load = async () => {
     setLoading(true);
-    const [mRes, kRes] = await Promise.all([
+    const [mRes, kRes, lRes] = await Promise.all([
       adminFetch(`/api/admin/premium-menus?teacher_id=${teacher.id}`),
       adminFetch(`/api/admin/premium-menus/api-key?teacher_id=${teacher.id}`),
+      adminFetch(`/api/admin/premium-menus/lp-images?teacher_id=${teacher.id}`),
     ]);
     const mJson = await mRes.json().catch(() => ({}));
     const kJson = await kRes.json().catch(() => ({}));
+    const lJson = await lRes.json().catch(() => ({}));
     setMenus(mJson.menus ?? []);
     setKeyInfo(kJson.key ?? null);
+    setLpImages(lJson.images ?? []);
     setLoading(false);
   };
 
@@ -235,6 +242,63 @@ function TeacherPanel({ teacher, canEdit }: { teacher: Teacher; canEdit: boolean
     await load();
   };
 
+  // --- LP画像 ---
+  const lpAdd = async (files: FileList) => {
+    setLpUploading(true);
+    try {
+      let order = lpImages.length;
+      // 選んだ順番のまま、下に追加していく
+      for (const file of Array.from(files)) {
+        const url = await uploadImage(file, "premium-lp");
+        const res = await adminFetch("/api/admin/premium-menus/lp-images", {
+          method: "POST",
+          body: JSON.stringify({ teacher_id: teacher.id, image_url: url, display_order: order++ }),
+        });
+        if (!res.ok) {
+          const json = await res.json().catch(() => ({}));
+          alert(json.error ?? "追加に失敗しました");
+          break;
+        }
+      }
+      await load();
+    } catch {
+      alert("画像のアップロードに失敗しました");
+    } finally {
+      setLpUploading(false);
+    }
+  };
+
+  const lpReplace = async (id: string, file: File) => {
+    setLpUploading(true);
+    try {
+      const url = await uploadImage(file, "premium-lp");
+      await adminFetch("/api/admin/premium-menus/lp-images", { method: "PATCH", body: JSON.stringify({ id, image_url: url }) });
+      await load();
+    } catch {
+      alert("画像のアップロードに失敗しました");
+    } finally {
+      setLpUploading(false);
+    }
+  };
+
+  const lpReorder = async (index: number, direction: "up" | "down") => {
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= lpImages.length) return;
+    const current = lpImages[index];
+    const target = lpImages[targetIndex];
+    await Promise.all([
+      adminFetch("/api/admin/premium-menus/lp-images", { method: "PATCH", body: JSON.stringify({ id: current.id, display_order: targetIndex }) }),
+      adminFetch("/api/admin/premium-menus/lp-images", { method: "PATCH", body: JSON.stringify({ id: target.id, display_order: index }) }),
+    ]);
+    await load();
+  };
+
+  const lpDelete = async (id: string) => {
+    if (!confirm("このLP画像を削除しますか？")) return;
+    await adminFetch(`/api/admin/premium-menus/lp-images?id=${id}`, { method: "DELETE" });
+    await load();
+  };
+
   const handleImage = async (file: File) => {
     setUploading(true);
     try {
@@ -322,6 +386,53 @@ function TeacherPanel({ teacher, canEdit }: { teacher: Teacher; canEdit: boolean
               </button>
             )}
           </div>
+        </div>
+      </section>
+
+      {/* LP画像 */}
+      <section>
+        <h3 className="text-base font-semibold text-gray-800 mb-2">LP画像</h3>
+        <p className="text-xs text-gray-500 mb-3">
+          一覧ページの説明文の下・メニューの上に、上から順にすき間なくつなげて表示します（複数枚を一度に選べます）
+          <br />
+          推奨：横幅1080px前後の縦長画像。1枚の長いLPを何枚かに分けて登録すると、つながって見えます
+        </p>
+
+        <div className="space-y-3">
+          {lpImages.length === 0 && <div className="text-sm text-gray-400">まだLP画像がありません</div>}
+
+          {lpImages.map((img, index) => (
+            <div key={img.id} className="flex items-center gap-3 p-3 border border-gray-200 rounded">
+              {canEdit && (
+                <div className="flex flex-col gap-1 shrink-0">
+                  <button type="button" onClick={() => lpReorder(index, "up")} disabled={index === 0}
+                    className="w-6 h-6 flex items-center justify-center rounded border border-gray-300 text-xs text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-50">↑</button>
+                  <button type="button" onClick={() => lpReorder(index, "down")} disabled={index === lpImages.length - 1}
+                    className="w-6 h-6 flex items-center justify-center rounded border border-gray-300 text-xs text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-50">↓</button>
+                </div>
+              )}
+              <img src={img.image_url} alt="" className="w-24 h-32 object-cover object-top rounded border border-gray-200 shrink-0" />
+              <div className="flex-1 text-xs text-gray-500">{index + 1}枚目</div>
+              {canEdit && (
+                <div className="flex items-center gap-3 shrink-0">
+                  <label className="text-xs text-blue-600 hover:text-blue-800 cursor-pointer">
+                    {lpUploading ? "アップロード中..." : "差し替える"}
+                    <input type="file" accept="image/*" className="hidden" disabled={lpUploading}
+                      onChange={(e) => { const f = e.target.files?.[0]; if (f) lpReplace(img.id, f); e.target.value = ""; }} />
+                  </label>
+                  <button type="button" onClick={() => lpDelete(img.id)} className="text-xs text-red-500 hover:text-red-700">削除</button>
+                </div>
+              )}
+            </div>
+          ))}
+
+          {canEdit && (
+            <label className="inline-flex items-center px-4 py-2 rounded border border-gray-300 text-sm text-gray-700 cursor-pointer hover:bg-gray-50">
+              {lpUploading ? "アップロード中..." : "＋ LP画像を追加"}
+              <input type="file" accept="image/*" multiple className="hidden" disabled={lpUploading}
+                onChange={(e) => { const fs = e.target.files; if (fs && fs.length) lpAdd(fs); e.target.value = ""; }} />
+            </label>
+          )}
         </div>
       </section>
 
