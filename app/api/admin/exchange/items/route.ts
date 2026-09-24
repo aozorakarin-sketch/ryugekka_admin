@@ -5,7 +5,7 @@ import { supabaseAdmin, getAdminEmail, canEditTeacher } from '@/lib/exchangeAdmi
 //   見るのは管理者4人全員OK、変更はその先生本人だけ
 
 const EDITABLE = ['name', 'description', 'image_url', 'required_tokens', 'item_type', 'coupon_spec',
-  'digital_url', 'with_message', 'stock', 'is_published', 'sort_order'] as const
+  'digital_url', 'digital_file_path', 'digital_file_name', 'with_message', 'stock', 'is_published', 'sort_order'] as const
 
 function pickEditable(body: any) {
   const out: Record<string, any> = {}

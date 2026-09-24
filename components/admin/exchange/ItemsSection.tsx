@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { authFetch } from "./authFetch";
 
-type ItemType = "coupon" | "goods";
+type ItemType = "coupon" | "goods" | "digital";
 
 type Item = {
   id: string;
@@ -13,8 +13,11 @@ type Item = {
   description: string | null;
   image_url: string | null;
   required_tokens: number;
-  item_type: ItemType | "digital";
+  item_type: ItemType;
   coupon_spec: { discount_rate?: number; valid_days?: number } | null;
+  digital_url: string | null;
+  digital_file_path: string | null;
+  digital_file_name: string | null;
   with_message: boolean;
   stock: number | null;
   is_default: boolean;
@@ -30,6 +33,15 @@ async function uploadImage(file: File): Promise<string> {
   if (error) throw error;
   const { data } = supabase.storage.from("shop").getPublicUrl(path);
   return data.publicUrl;
+}
+
+// デジタル特典のファイルは、ショップのデジタル商品と同じ非公開バケット「shop-digital」に保存（公開URLは作らない）
+async function uploadDigitalFile(file: File): Promise<{ path: string; name: string }> {
+  const ext = file.name.split(".").pop();
+  const path = `exchange/${crypto.randomUUID()}.${ext}`;
+  const { error } = await supabase.storage.from("shop-digital").upload(path, file);
+  if (error) throw error;
+  return { path, name: file.name };
 }
 
 const TYPE_LABEL: Record<string, string> = { coupon: "🎟 電話クーポン", goods: "📦 グッズ", digital: "📄 デジタル" };
@@ -52,6 +64,11 @@ export function ItemsSection({ teacherId, canEdit, tokenLabel }: { teacherId: st
   const [stock, setStock] = useState("");
   const [withMessage, setWithMessage] = useState(false);
   const [sortOrder, setSortOrder] = useState("0");
+  const [digitalKind, setDigitalKind] = useState<"video" | "file">("video");
+  const [digitalUrl, setDigitalUrl] = useState("");
+  const [digitalFilePath, setDigitalFilePath] = useState("");
+  const [digitalFileName, setDigitalFileName] = useState("");
+  const [fileUploading, setFileUploading] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -68,18 +85,21 @@ export function ItemsSection({ teacherId, canEdit, tokenLabel }: { teacherId: st
     setItemType("coupon"); setName(""); setDescription(""); setImageUrl("");
     setRequiredTokens(""); setDiscountRate(""); setValidDays("30"); setStock("");
     setWithMessage(false); setSortOrder(String(items.length + 1));
+    setDigitalKind("video"); setDigitalUrl(""); setDigitalFilePath(""); setDigitalFileName("");
     setShowModal(true);
   };
 
   const openEdit = (it: Item) => {
     setEditTarget(it);
-    setItemType(it.item_type === "goods" ? "goods" : "coupon");
+    setItemType(it.item_type);
     setName(it.name); setDescription(it.description ?? ""); setImageUrl(it.image_url ?? "");
     setRequiredTokens(String(it.required_tokens));
     setDiscountRate(String(it.coupon_spec?.discount_rate ?? ""));
     setValidDays(String(it.coupon_spec?.valid_days ?? 30));
     setStock(it.stock === null ? "" : String(it.stock));
     setWithMessage(it.with_message); setSortOrder(String(it.sort_order));
+    setDigitalKind(it.digital_file_path ? "file" : "video");
+    setDigitalUrl(it.digital_url ?? ""); setDigitalFilePath(it.digital_file_path ?? ""); setDigitalFileName(it.digital_file_name ?? "");
     setShowModal(true);
   };
 
@@ -90,6 +110,17 @@ export function ItemsSection({ teacherId, canEdit, tokenLabel }: { teacherId: st
     finally { setUploading(false); }
   };
 
+  const handleDigitalFileUpload = async (file: File) => {
+    setFileUploading(true);
+    try {
+      const { path, name } = await uploadDigitalFile(file);
+      setDigitalFilePath(path); setDigitalFileName(name);
+    } catch (err) {
+      console.error("ファイルアップロードエラー:", err);
+      alert("ファイルのアップロードに失敗しました");
+    } finally { setFileUploading(false); }
+  };
+
   const save = async () => {
     if (!name.trim()) { alert("商品名を入力してください"); return; }
     const tokens = Number(requiredTokens);
@@ -97,6 +128,10 @@ export function ItemsSection({ teacherId, canEdit, tokenLabel }: { teacherId: st
     const isCoupon = itemType === "coupon";
     const rate = Number(discountRate);
     if (isCoupon && (!rate || rate < 1 || rate > 100)) { alert("割引率は1〜100で入力してください"); return; }
+    const isDigital = itemType === "digital";
+    if (isDigital && digitalKind === "video" && !digitalUrl.trim()) { alert("動画のURLを入力してください"); return; }
+    if (isDigital && digitalKind === "file" && !digitalFilePath) { alert("ファイルをアップロードしてください"); return; }
+    const isGoods = itemType === "goods";
 
     setSaving(true);
     const payload = {
@@ -107,9 +142,13 @@ export function ItemsSection({ teacherId, canEdit, tokenLabel }: { teacherId: st
       image_url: imageUrl || null,
       required_tokens: tokens,
       coupon_spec: isCoupon ? { discount_rate: rate, valid_days: Number(validDays || 30) } : null,
-      // クーポンは在庫なし（無制限）。グッズは空欄なら無制限
-      stock: isCoupon || stock === "" ? null : Number(stock),
-      with_message: isCoupon ? false : withMessage,
+      // 在庫を持つのはグッズだけ（空欄なら無制限）。クーポン・デジタルは無制限
+      stock: !isGoods || stock === "" ? null : Number(stock),
+      with_message: isGoods ? withMessage : false,
+      // デジタルは「動画URL」か「ファイル」のどちらか一方だけを保存
+      digital_url: isDigital && digitalKind === "video" ? digitalUrl.trim() : null,
+      digital_file_path: isDigital && digitalKind === "file" ? digitalFilePath : null,
+      digital_file_name: isDigital && digitalKind === "file" ? digitalFileName : null,
       sort_order: Number(sortOrder || 0),
     };
     const res = editTarget
@@ -163,6 +202,9 @@ export function ItemsSection({ teacherId, canEdit, tokenLabel }: { teacherId: st
               {it.item_type === "coupon" && (
                 <p className="text-xs text-gray-500">{it.coupon_spec?.discount_rate}%OFF・交換から{it.coupon_spec?.valid_days ?? 30}日有効</p>
               )}
+              {it.item_type === "digital" && (
+                <p className="text-xs text-gray-500 truncate">{it.digital_file_path ? `ファイル：${it.digital_file_name ?? ""}` : "動画URL"}</p>
+              )}
               {it.item_type === "goods" && (
                 <p className={`text-xs ${it.stock === 0 ? "text-red-500" : "text-gray-500"}`}>
                   在庫：{it.stock === null ? "制限なし" : it.stock === 0 ? "在庫切れ" : `${it.stock}点`}
@@ -190,7 +232,7 @@ export function ItemsSection({ teacherId, canEdit, tokenLabel }: { teacherId: st
             <div className="mb-4">
               <label className="text-xs text-gray-500 block mb-1">種類</label>
               <div className="flex gap-2">
-                {(["coupon", "goods"] as const).map((t) => (
+                {(["coupon", "digital", "goods"] as const).map((t) => (
                   <button key={t} type="button" onClick={() => setItemType(t)}
                     className={`flex-1 text-sm px-2 py-2 rounded border ${itemType === t ? "bg-teal-500 text-white border-teal-500" : "bg-white text-gray-600 border-gray-300"}`}>
                     {TYPE_LABEL[t]}
@@ -198,7 +240,9 @@ export function ItemsSection({ teacherId, canEdit, tokenLabel }: { teacherId: st
                 ))}
               </div>
               <p className="text-[11px] text-gray-400 mt-1">
-                {itemType === "coupon" ? "交換するとお客さんに電話鑑定用の%OFFクーポンが届きます" : "交換されると申込一覧に発送先が届きます。発送したら「発送済み」にしてください"}
+                {itemType === "coupon" ? "交換するとお客さんに電話鑑定用の%OFFクーポンが届きます"
+                  : itemType === "digital" ? "交換したお客さんだけが、交換所の「交換した特典」から見たりダウンロードしたりできます"
+                  : "交換されると申込一覧に発送先が届きます。発送したら「発送済み」にしてください"}
               </p>
             </div>
 
@@ -231,7 +275,37 @@ export function ItemsSection({ teacherId, canEdit, tokenLabel }: { teacherId: st
               </div>
             </div>
 
-            {itemType === "coupon" ? (
+            {itemType === "digital" && (
+              <div className="mb-4">
+                <div className="flex gap-2 mb-2">
+                  <button type="button" onClick={() => setDigitalKind("video")}
+                    className={`flex-1 text-xs px-2 py-1.5 rounded border ${digitalKind === "video" ? "bg-purple-500 text-white border-purple-500" : "bg-white text-gray-600 border-gray-300"}`}>📹 動画URL</button>
+                  <button type="button" onClick={() => setDigitalKind("file")}
+                    className={`flex-1 text-xs px-2 py-1.5 rounded border ${digitalKind === "file" ? "bg-indigo-500 text-white border-indigo-500" : "bg-white text-gray-600 border-gray-300"}`}>📄 ファイル</button>
+                </div>
+                {digitalKind === "video" ? (
+                  <>
+                    <input type="text" value={digitalUrl} onChange={e => setDigitalUrl(e.target.value)} placeholder="https://youtu.be/...（限定公開など）"
+                      className="w-full border rounded px-3 py-2 text-sm" />
+                    <p className="text-[11px] text-gray-400 mt-1">交換したお客さんにだけ表示されます</p>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-3">
+                      {digitalFileName && <span className="text-xs text-gray-700 bg-gray-100 px-2 py-1 rounded truncate max-w-[160px]">{digitalFileName}</span>}
+                      <label className="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-2 rounded cursor-pointer">
+                        {fileUploading ? "アップロード中..." : digitalFileName ? "差し替える" : "ファイルを選択（PDF・MP3・画像など）"}
+                        <input type="file" className="hidden" disabled={fileUploading}
+                          onChange={(e) => { const f = e.target.files?.[0]; if (f) handleDigitalFileUpload(f); }} />
+                      </label>
+                    </div>
+                    <p className="text-[11px] text-gray-400 mt-1">交換したお客さんに、10分だけ有効なダウンロードURLが発行されます</p>
+                  </>
+                )}
+              </div>
+            )}
+
+            {itemType === "digital" ? null : itemType === "coupon" ? (
               <div className="flex gap-3 mb-4">
                 <div className="flex-1">
                   <label className="text-xs text-gray-500 block mb-1">割引率（%OFF）</label>
@@ -255,7 +329,7 @@ export function ItemsSection({ teacherId, canEdit, tokenLabel }: { teacherId: st
 
             <div className="flex justify-between">
               <button onClick={() => setShowModal(false)} className="bg-gray-400 text-white text-sm px-4 py-2 rounded">閉じる</button>
-              <button onClick={save} disabled={saving || uploading} className="bg-teal-500 hover:bg-teal-600 text-white text-sm px-4 py-2 rounded disabled:opacity-50">
+              <button onClick={save} disabled={saving || uploading || fileUploading} className="bg-teal-500 hover:bg-teal-600 text-white text-sm px-4 py-2 rounded disabled:opacity-50">
                 {saving ? "保存中..." : "保存"}
               </button>
             </div>
