@@ -33,6 +33,9 @@ export default function UserTeacherListPage() {
   // teacher_id -> 'teacher' | 'customer'（先生からブロック済み／お客さんからブロック済み）
   const [blockedTeachers, setBlockedTeachers] = useState<Record<string, 'teacher' | 'customer'>>({})
   const [blockingId, setBlockingId] = useState<string | null>(null)
+  // 友達紹介：この人を紹介した人（紹介されて登録した場合のみ）／この人が紹介した人数
+  const [referrer, setReferrer] = useState<{ id: string; name: string; email: string; at: string } | null>(null)
+  const [referredCount, setReferredCount] = useState(0)
 
   useEffect(() => {
     fetchData()
@@ -45,6 +48,37 @@ export default function UserTeacherListPage() {
       .eq("id", id)
       .single()
     setHandleName(userData?.handle_name ?? "-")
+
+    // 友達紹介：この人が「紹介されて登録した」記録があれば、紹介元を取得
+    const { data: refRow } = await supabase
+      .from("friend_referrals")
+      .select("referrer_id, created_at")
+      .eq("referred_id", id)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle()
+    if (refRow) {
+      const { data: refUser } = await supabase
+        .from("users")
+        .select("handle_name, email")
+        .eq("id", refRow.referrer_id)
+        .single()
+      setReferrer({
+        id: refRow.referrer_id,
+        name: refUser?.handle_name ?? "-",
+        email: refUser?.email ?? "",
+        at: refRow.created_at,
+      })
+    } else {
+      setReferrer(null)
+    }
+
+    // この人が紹介した人数
+    const { count: refCount } = await supabase
+      .from("friend_referrals")
+      .select("id", { count: "exact", head: true })
+      .eq("referrer_id", id)
+    setReferredCount(refCount ?? 0)
 
     const { data: cons } = await supabase
       .from("consultations")
@@ -135,6 +169,21 @@ export default function UserTeacherListPage() {
       <div className="mb-6">
         <a href="/admin/users" className="text-xs text-gray-400 hover:underline">← ユーザー一覧に戻る</a>
         <h1 className="text-2xl font-bold mt-1">{handleName}</h1>
+        {referrer && (
+          <p className="text-sm mt-2">
+            <span className="bg-pink-100 text-pink-800 px-2 py-0.5 rounded-full text-xs font-medium">🎁 紹介元</span>{" "}
+            <a href={`/admin/users/${referrer.id}`} className="font-medium text-blue-600 hover:underline">
+              {referrer.name}
+            </a>
+            {referrer.email && <span className="text-gray-500">（{referrer.email}）</span>}
+            <span className="text-gray-400"> ／ {formatDate(referrer.at)} 登録</span>
+          </p>
+        )}
+        {referredCount > 0 && (
+          <p className="text-sm mt-1 text-gray-600">
+            友達紹介：{referredCount}人を紹介
+          </p>
+        )}
         <p className="text-sm text-gray-500 mt-1">先生別の鑑定履歴</p>
       </div>
 
