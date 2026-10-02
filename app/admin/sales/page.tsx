@@ -40,7 +40,7 @@ const TEACHER_TABS: { id: string; label: string }[] = [
   { id: 'all', label: '全員' },
   { id: 'cd2c4101-2e24-4ae2-8d6a-507a943904af', label: '青空花林' },
   { id: '17cf0ca1-7526-466e-a644-9d3efefa4091', label: '椎名架月' },
-  { id: '3ba85bb9-9065-461b-b76b-cc488d4c0c3b', label: '雲龍蓮' },
+  { id: '3ba85bb9-9065-461b-b76b-cc488d4c0c3b', label: '龍蓮' },
 ]
 
 const CURRENT_YEAR = new Date().getFullYear()
@@ -451,14 +451,14 @@ export default function SalesDashboardPage() {
               {/* 振込精算（月末締め・決済額の5%） */}
               <h2 style={{ fontSize: '1.1rem', fontWeight: 700, marginTop: 36, marginBottom: 4 }}>振込精算</h2>
               <p style={{ fontSize: '0.75rem', color: '#999', marginBottom: 16 }}>
-                月末締め。雲龍蓮・架月ちゃんは総売上（トラカ決済額＋ショップ売上）の5%を翌月10日までに青空花林へ、
+                月末締め。龍蓮・架月ちゃんは総売上（トラカ決済額＋ショップ売上）の5%を翌月10日までに青空花林へ、
                 青空花林は全員合計の総売上の5%を翌月15日までに虎へ振り込む想定の計算です。
               </p>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                 <thead>
                   <tr style={{ borderBottom: '2px solid #ddd', textAlign: 'right' }}>
                     <th style={{ textAlign: 'left', padding: '8px 4px' }}>対象月</th>
-                    <th style={{ padding: '8px 4px' }}>雲龍蓮→青空花林</th>
+                    <th style={{ padding: '8px 4px' }}>龍蓮→青空花林</th>
                     <th style={{ padding: '8px 4px' }}>架月→青空花林</th>
                     <th style={{ padding: '8px 4px' }}>期限</th>
                     <th style={{ padding: '8px 4px' }}>青空花林→虎</th>
@@ -494,8 +494,8 @@ export default function SalesDashboardPage() {
               </table>
 
               <p style={{ fontSize: '0.75rem', color: '#999', marginTop: 12 }}>
-                ※「青空花林→虎」は雲龍蓮・架月・花林の合計決済額（青空花林自身の分も含む）の5%です。<br />
-                ※振込先口座はこの画面では管理していません（別途、雲龍蓮・架月ちゃんへお伝えしているものをご利用ください）。
+                ※「青空花林→虎」は龍蓮・架月・花林の合計決済額（青空花林自身の分も含む）の5%です。<br />
+                ※振込先口座はこの画面では管理していません（別途、龍蓮・架月ちゃんへお伝えしているものをご利用ください）。
               </p>
             </>
           )}

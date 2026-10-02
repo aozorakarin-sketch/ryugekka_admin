@@ -6,7 +6,7 @@ import { ProductsSection } from "@/components/admin/shop/ProductsSection";
 import { OrdersSection } from "@/components/admin/shop/OrdersSection";
 
 const TEACHERS = [
-  { id: "3ba85bb9-9065-461b-b76b-cc488d4c0c3b", name: "龍（雲龍蓮）", email: "bazvideo412@gmail.com" },
+  { id: "3ba85bb9-9065-461b-b76b-cc488d4c0c3b", name: "龍（龍蓮）", email: "bazvideo412@gmail.com" },
   { id: "17cf0ca1-7526-466e-a644-9d3efefa4091", name: "月（椎名架月）", email: "tomo517ko@gmail.com" },
   { id: "cd2c4101-2e24-4ae2-8d6a-507a943904af", name: "花（青空花林）", email: "aozora.karin@gmail.com" },
 ] as const;

@@ -9,7 +9,7 @@ const APP_ID = "8a10ad2855b44c9aa6cbed991ea48d86"
 const EMAIL_TO_TEACHER: Record<string, { id: string; name: string; channel: string }> = {
   "aozora.karin@gmail.com": { id: "cd2c4101-2e24-4ae2-8d6a-507a943904af", name: "青空花林", channel: "karin" },
   "tomo517ko@gmail.com": { id: "17cf0ca1-7526-466e-a644-9d3efefa4091", name: "椎名架月", channel: "katsuki" },
-  "bazvideo412@gmail.com": { id: "3ba85bb9-9065-461b-b76b-cc488d4c0c3b", name: "雲龍蓮", channel: "renren" },
+  "bazvideo412@gmail.com": { id: "3ba85bb9-9065-461b-b76b-cc488d4c0c3b", name: "龍蓮", channel: "renren" },
   "ohayo0840ohayo@gmail.com": { id: "e482fff7-25db-483d-8d68-46a893403be3", name: "宝明里茉", channel: "rioma" },
 }
 

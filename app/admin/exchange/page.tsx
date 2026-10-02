@@ -7,7 +7,7 @@ import { ExchangeOrdersSection } from "@/components/admin/exchange/ExchangeOrder
 
 // ★得トラカ交換所の管理（ショップ管理と同じ作り：先生タブ＋特典／申込）
 const TEACHERS = [
-  { id: "3ba85bb9-9065-461b-b76b-cc488d4c0c3b", name: "龍（雲龍蓮）", token: "龍得トラカ", email: "bazvideo412@gmail.com" },
+  { id: "3ba85bb9-9065-461b-b76b-cc488d4c0c3b", name: "龍（龍蓮）", token: "龍得トラカ", email: "bazvideo412@gmail.com" },
   { id: "17cf0ca1-7526-466e-a644-9d3efefa4091", name: "月（椎名架月）", token: "月得トラカ", email: "tomo517ko@gmail.com" },
   { id: "cd2c4101-2e24-4ae2-8d6a-507a943904af", name: "花（青空花林）", token: "花得トラカ", email: "aozora.karin@gmail.com" },
 ] as const;

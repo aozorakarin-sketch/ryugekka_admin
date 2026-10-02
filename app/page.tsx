@@ -70,7 +70,7 @@ export default function Home() {
         </div>
         <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto">
           {[
-            { name: "🐉 雲龍蓮", desc: "龍の如く、力強い導き" },
+            { name: "🐉 龍蓮", desc: "龍の如く、力強い導き" },
             { name: "🌙 椎名架月", desc: "月の光、静かな洞察" },
             { name: "🌸 青空花林", desc: "花の如く、優しい癒し" }
           ].map((teacher) => (

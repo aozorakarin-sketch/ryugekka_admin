@@ -22,14 +22,14 @@ type Consultation = {
 
 const TEACHERS = [
   { id: "e482fff7-25db-483d-8d68-46a893403be3", name: "宝明里茉", slug: "" },
-  { id: "3ba85bb9-9065-461b-b76b-cc488d4c0c3b", name: "雲龍蓮", slug: "ryu" },
+  { id: "3ba85bb9-9065-461b-b76b-cc488d4c0c3b", name: "龍蓮", slug: "ryu" },
   { id: "17cf0ca1-7526-466e-a644-9d3efefa4091", name: "椎名架月", slug: "tsuki" },
   { id: "cd2c4101-2e24-4ae2-8d6a-507a943904af", name: "青空花林", slug: "hana" },
 ]
 
 const TEACHER_MAP: Record<string, string> = {
   "e482fff7-25db-483d-8d68-46a893403be3": "宝明里茉",
-  "3ba85bb9-9065-461b-b76b-cc488d4c0c3b": "雲龍蓮",
+  "3ba85bb9-9065-461b-b76b-cc488d4c0c3b": "龍蓮",
   "17cf0ca1-7526-466e-a644-9d3efefa4091": "椎名架月",
   "cd2c4101-2e24-4ae2-8d6a-507a943904af": "青空花林",
 }

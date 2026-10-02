@@ -6,19 +6,19 @@ import { supabase } from "@/lib/supabaseClient"
 const EMAIL_TO_TEACHER: Record<string, { id: string; name: string }> = {
   "aozora.karin@gmail.com": { id: "cd2c4101-2e24-4ae2-8d6a-507a943904af", name: "青空花林" },
   "tomo517ko@gmail.com": { id: "17cf0ca1-7526-466e-a644-9d3efefa4091", name: "椎名架月" },
-  "bazvideo412@gmail.com": { id: "3ba85bb9-9065-461b-b76b-cc488d4c0c3b", name: "雲龍蓮" },
+  "bazvideo412@gmail.com": { id: "3ba85bb9-9065-461b-b76b-cc488d4c0c3b", name: "龍蓮" },
 }
 
 const TEACHER_NAMES: Record<string, string> = {
   "cd2c4101-2e24-4ae2-8d6a-507a943904af": "青空花林",
   "17cf0ca1-7526-466e-a644-9d3efefa4091": "椎名架月",
-  "3ba85bb9-9065-461b-b76b-cc488d4c0c3b": "雲龍蓮",
+  "3ba85bb9-9065-461b-b76b-cc488d4c0c3b": "龍蓮",
 }
 
 const TEACHER_STYLE: Record<string, { color: string; bg: string; emoji: string }> = {
   "青空花林": { color: "#c0607a", bg: "#fff5f7", emoji: "🌸" },
   "椎名架月": { color: "#c9a84c", bg: "#fffbf0", emoji: "🌙" },
-  "雲龍蓮":   { color: "#8b7cb8", bg: "#f8f5ff", emoji: "🐉" },
+  "龍蓮":   { color: "#8b7cb8", bg: "#f8f5ff", emoji: "🐉" },
 }
 
 function getTemplate(name: string): string {

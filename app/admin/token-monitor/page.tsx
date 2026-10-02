@@ -27,7 +27,7 @@ const REFRESH_MS = 30_000     // 30秒ごとに自動更新
 // 表示順・トラカ名・色（花・龍・月）
 const TORAKA = [
   { key: 'hana', label: '花トラカ', issuer: '青空花林', color: '#d6336c', light: '#fff0f6' },
-  { key: 'ryu', label: '龍トラカ', issuer: '雲龍蓮', color: '#1c7ed6', light: '#e7f5ff' },
+  { key: 'ryu', label: '龍トラカ', issuer: '龍蓮', color: '#1c7ed6', light: '#e7f5ff' },
   { key: 'tsuki', label: '月トラカ', issuer: '椎名架月', color: '#7048e8', light: '#f3f0ff' },
 ]
 

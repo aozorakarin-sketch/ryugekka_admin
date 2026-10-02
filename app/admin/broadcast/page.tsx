@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 
 const SENDERS = [
   { key: "info", label: "運営（info@）" },
-  { key: "ryu", label: "龍（雲龍蓮）" },
+  { key: "ryu", label: "龍（龍蓮）" },
   { key: "tsuki", label: "月（椎名架月）" },
   { key: "hana", label: "花（青空花林）" },
 ] as const;

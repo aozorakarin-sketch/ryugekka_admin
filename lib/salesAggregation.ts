@@ -8,7 +8,7 @@ import { createServerClient } from '@supabase/ssr'
 export const TEACHER_NAME_MAP: Record<string, string> = {
   'cd2c4101-2e24-4ae2-8d6a-507a943904af': '青空花林',
   '17cf0ca1-7526-466e-a644-9d3efefa4091': '椎名架月',
-  '3ba85bb9-9065-461b-b76b-cc488d4c0c3b': '雲龍蓮',
+  '3ba85bb9-9065-461b-b76b-cc488d4c0c3b': '龍蓮',
 }
 
 // purchase時のpoint_typeは teacherKey（'hana'|'tsuki'|'ryu'）で保存されている

@@ -5,7 +5,7 @@ import { useState } from "react";
 const SITE_URL = "https://ryugekka.vercel.app";
 
 const TEACHERS = [
-  { key: "ryu", name: "龍（雲龍蓮）" },
+  { key: "ryu", name: "龍（龍蓮）" },
   { key: "tsuki", name: "月（椎名架月）" },
   { key: "hana", name: "花（青空花林）" },
 ] as const;

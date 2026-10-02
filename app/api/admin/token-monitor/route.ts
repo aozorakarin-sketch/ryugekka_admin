@@ -11,7 +11,7 @@ const supabase = createClient(
 const TEACHERS = [
   { key: 'hana', name: '青空花林' },
   { key: 'tsuki', name: '椎名架月' },
-  { key: 'ryu', name: '雲龍蓮' },
+  { key: 'ryu', name: '龍蓮' },
 ]
 
 export async function GET() {

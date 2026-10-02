@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabaseClient"
 const EMAIL_TO_TEACHER: Record<string, { id: string; name: string }> = {
   "aozora.karin@gmail.com": { id: "cd2c4101-2e24-4ae2-8d6a-507a943904af", name: "青空花林" },
   "tomo517ko@gmail.com": { id: "17cf0ca1-7526-466e-a644-9d3efefa4091", name: "椎名架月" },
-  "bazvideo412@gmail.com": { id: "3ba85bb9-9065-461b-b76b-cc488d4c0c3b", name: "雲龍蓮" },
+  "bazvideo412@gmail.com": { id: "3ba85bb9-9065-461b-b76b-cc488d4c0c3b", name: "龍蓮" },
 }
 
 const MAX_CHARS = 60
