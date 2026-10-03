@@ -79,7 +79,11 @@ export default function BlogEditPage() {
       if (data) {
         setTitle(data.title)
         setCategory(data.tags?.[0] ?? "スピリチュアル")
-        setPublishedAt(data.published_at ? new Date(data.published_at).toISOString().slice(0, 16) : "")
+        setPublishedAt(
+          data.published_at
+            ? new Date(new Date(data.published_at).getTime() - new Date(data.published_at).getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+            : ""
+        )
         setContent(data.content ?? "")
       }
     } else {
