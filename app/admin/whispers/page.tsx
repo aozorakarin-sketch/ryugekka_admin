@@ -94,7 +94,12 @@ export default function WhispersPage() {
   const openEdit = (w: Whisper) => {
     setEditTarget(w)
     setContent(w.content)
-    setPublishAt(w.publish_at ? w.publish_at.slice(0, 16) : "")
+    // publish_at はタイムゾーン付きで返るので、日本時間（ブラウザの時刻）に直して入力欄に入れる
+    setPublishAt(
+      w.publish_at
+        ? new Date(new Date(w.publish_at).getTime() - new Date(w.publish_at).getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+        : ""
+    )
     setIsVisible(w.is_visible)
     setButton1Label(w.button1_label ?? ""); setButton1Url(w.button1_url ?? "")
     setButton2Label(w.button2_label ?? ""); setButton2Url(w.button2_url ?? "")
@@ -124,16 +129,19 @@ export default function WhispersPage() {
       button3_url: button3Url.trim() || null,
     }
 
-    if (editTarget) {
-      await supabase.from("whispers").update(payload).eq("id", editTarget.id)
-    } else {
-      await supabase.from("whispers").insert({
-        ...payload,
-        teacher_id: teacher.id,
-        data_source: "minden",
-      })
-    }
+    const { error } = editTarget
+      ? await supabase.from("whispers").update(payload).eq("id", editTarget.id)
+      : await supabase.from("whispers").insert({
+          ...payload,
+          teacher_id: teacher.id,
+          data_source: "minden",
+        })
     setSaving(false)
+    if (error) {
+      console.error("whispers save error:", error)
+      alert(`保存できませんでした：${error.message}`)
+      return
+    }
     closeModal()
     fetchAll()
   }
