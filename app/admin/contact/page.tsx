@@ -3,6 +3,13 @@
 import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabaseClient"
 
+// お問い合わせの対象の先生（バッジの名前と色）
+const TEACHER_BADGE: Record<string, { name: string; className: string }> = {
+  "3ba85bb9-9065-461b-b76b-cc488d4c0c3b": { name: "🐉 龍蓮", className: "bg-purple-50 text-purple-700 border-purple-200" },
+  "17cf0ca1-7526-466e-a644-9d3efefa4091": { name: "🌙 椎名架月", className: "bg-yellow-50 text-yellow-700 border-yellow-300" },
+  "cd2c4101-2e24-4ae2-8d6a-507a943904af": { name: "🌸 青空花林", className: "bg-pink-50 text-pink-700 border-pink-200" },
+}
+
 type ContactMessage = {
   id: string
   name: string | null
@@ -10,6 +17,7 @@ type ContactMessage = {
   category: string | null
   message: string
   created_at: string
+  teacher_id: string | null
 }
 
 export default function ContactMessagesPage() {
@@ -24,7 +32,7 @@ export default function ContactMessagesPage() {
     setLoading(true)
     const { data } = await supabase
       .from("contact_messages")
-      .select("id, name, email, category, message, created_at")
+      .select("id, name, email, category, message, created_at, teacher_id")
       .order("created_at", { ascending: false })
     setMessages(data ?? [])
     setLoading(false)
@@ -95,6 +103,11 @@ export default function ContactMessagesPage() {
               <div className="flex items-center gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    {msg.teacher_id && TEACHER_BADGE[msg.teacher_id] && (
+                      <span className={`text-xs border px-2 py-0.5 rounded-full font-medium ${TEACHER_BADGE[msg.teacher_id].className}`}>
+                        {TEACHER_BADGE[msg.teacher_id].name}について
+                      </span>
+                    )}
                     {msg.category && (
                       <span className="text-xs bg-teal-50 text-teal-700 border border-teal-200 px-2 py-0.5 rounded-full">
                         {msg.category}
@@ -148,6 +161,12 @@ export default function ContactMessagesPage() {
               <div>
                 <p className="text-xs text-gray-400 mb-0.5">カテゴリ</p>
                 <p className="font-medium text-gray-800">{selected.category ?? '—'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400 mb-0.5">対象の先生</p>
+                <p className="font-medium text-gray-800">
+                  {selected.teacher_id && TEACHER_BADGE[selected.teacher_id] ? TEACHER_BADGE[selected.teacher_id].name : '指定なし'}
+                </p>
               </div>
               <div>
                 <p className="text-xs text-gray-400 mb-0.5">受信日時</p>
