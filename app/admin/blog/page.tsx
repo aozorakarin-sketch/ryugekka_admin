@@ -42,8 +42,10 @@ export default function BlogPage() {
       .from("blog_posts")
       .select("id, title, status, tags, published_at, created_at")
       .eq("teacher_id", teacherId)
-      .order("created_at", { ascending: false })
-    setPosts(data ?? [])
+    const sorted = [...(data ?? [])].sort((a, b) =>
+      new Date(b.published_at || b.created_at).getTime() - new Date(a.published_at || a.created_at).getTime()
+    )
+    setPosts(sorted)
     setLoading(false)
   }
 
@@ -58,6 +60,9 @@ export default function BlogPage() {
     const d = new Date(s)
     return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`
   }
+
+  const isScheduled = (post: BlogPost) =>
+    post.status === "published" && !!post.published_at && new Date(post.published_at).getTime() > Date.now()
 
   if (loading) return <div className="p-6">読み込み中...</div>
 
@@ -89,9 +94,11 @@ export default function BlogPage() {
               </div>
             </div>
             <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${
-              post.status === "published" ? "bg-green-100 text-green-600" : "bg-gray-100 text-gray-500"
+              isScheduled(post)
+                ? "bg-amber-100 text-amber-600"
+                : post.status === "published" ? "bg-green-100 text-green-600" : "bg-gray-100 text-gray-500"
             }`}>
-              {post.status === "published" ? "公開中" : "非公開"}
+              {isScheduled(post) ? "予約中" : post.status === "published" ? "公開中" : "非公開"}
             </span>
             <div className="flex gap-2 shrink-0">
               <button
