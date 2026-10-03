@@ -48,6 +48,7 @@ export default function CallPage() {
   const [toasts, setToasts] = useState<{ message: string; type: 'normal' | 'warning' }[]>([])
   const [pausedUntil, setPausedUntil] = useState<string | null>(null)
   const [nowTick, setNowTick] = useState(Date.now())
+  const [soundOn, setSoundOn] = useState(false) // スマホは一度タップするまで音を鳴らせないため、状態を持つ
 
   const clientRef = useRef<any>(null)
   const localTrackRef = useRef<any>(null)
@@ -82,6 +83,32 @@ export default function CallPage() {
     return () => clearInterval(t)
   }, [])
 
+  // 画面のどこかを最初にタップしたとき、音が鳴らせる状態にする（無音で一瞬だけ再生して許可を取る）
+  useEffect(() => {
+    const unlock = () => {
+      const a = new Audio("/sounds/notification.mp3")
+      a.volume = 0
+      a.play().then(() => { a.pause(); a.currentTime = 0; setSoundOn(true) }).catch(() => {})
+      window.removeEventListener("pointerdown", unlock)
+      window.removeEventListener("keydown", unlock)
+    }
+    window.addEventListener("pointerdown", unlock)
+    window.addEventListener("keydown", unlock)
+    return () => {
+      window.removeEventListener("pointerdown", unlock)
+      window.removeEventListener("keydown", unlock)
+    }
+  }, [])
+
+  // バナーのボタン用：通知音を実際に鳴らして確認しつつ、音をオンにする
+  const enableSound = () => {
+    const a = new Audio("/sounds/notification.mp3")
+    a.play().then(() => setSoundOn(true)).catch(err => {
+      console.error("通知音エラー:", err)
+      addToast("🔇 音を鳴らせませんでした。スマホの音量・マナーモードを確認してください", "warning")
+    })
+  }
+
   const updateStatus = (s: "idle" | "calling" | "connected") => {
     setStatus(s)
     statusRef.current = s
@@ -106,7 +133,11 @@ export default function CallPage() {
   const playNotification = () => {
     try {
       const audio = new Audio("/sounds/notification.mp3")
-      audio.play().catch(err => console.error("通知音エラー:", err))
+      audio.play().catch(err => {
+        console.error("通知音エラー:", err)
+        setSoundOn(false)
+        addToast("🔇 通知音がブロックされました。画面を一度タップしてください", "warning")
+      })
     } catch (err) {
       console.error("通知音エラー:", err)
     }
@@ -525,6 +556,15 @@ export default function CallPage() {
       </div>
 
       <h1 className="text-xl font-bold mb-2">通話</h1>
+
+      {!soundOn && (
+        <button
+          onClick={enableSound}
+          className="mb-4 w-full px-4 py-3 bg-rose-50 border border-rose-200 rounded-xl text-sm text-rose-700 font-bold text-left"
+        >
+          🔇 通知音がオフです。タップして音をオンにしてください（お客様が来たときに鳴ります）
+        </button>
+      )}
 
       {waitingCount > 0 && (
         <div className="mb-4 px-4 py-2 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">
