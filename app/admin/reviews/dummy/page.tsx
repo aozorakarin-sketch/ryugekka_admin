@@ -94,7 +94,9 @@ export default function DummyReviewsPage() {
     setEditTarget(r)
     setSatisfaction(r.satisfaction)
     setComment(r.comment ?? "")
-    setCreatedAt(r.created_at.slice(0, 16))
+    // created_at はタイムゾーン付きで返るので、日本時間（ブラウザの時刻）に直して入力欄に入れる
+    const d = new Date(r.created_at)
+    setCreatedAt(new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16))
     setSelectedTags(r.tags ?? [])
     setSourceType(r.source_type ?? "")
     setShowModal(true)
