@@ -48,8 +48,10 @@ export default function NewsPage() {
     const { data } = await supabase
       .from("news")
       .select("id, title, content, is_important, is_published, published_at, created_at")
-      .order("created_at", { ascending: false })
-    setNews(data ?? [])
+    const sorted = [...(data ?? [])].sort((a, b) =>
+      new Date(b.published_at ?? b.created_at).getTime() - new Date(a.published_at ?? a.created_at).getTime()
+    )
+    setNews(sorted)
     setLoading(false)
   }
 
@@ -69,7 +71,11 @@ export default function NewsPage() {
     setContent(n.content ?? "")
     setIsImportant(n.is_important)
     setIsPublished(n.is_published)
-    setPublishedAt(n.published_at ? new Date(n.published_at).toISOString().slice(0, 16) : "")
+    setPublishedAt(
+      n.published_at
+        ? new Date(new Date(n.published_at).getTime() - new Date(n.published_at).getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+        : ""
+    )
     setShowModal(true)
     setSelected(null)
   }
@@ -116,6 +122,15 @@ export default function NewsPage() {
     return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`
   }
 
+  const isScheduled = (n: News) =>
+    n.is_published && !!n.published_at && new Date(n.published_at).getTime() > Date.now()
+
+  const statusLabel = (n: News) => (isScheduled(n) ? "予約中" : n.is_published ? "公開中" : "非公開")
+  const statusClass = (n: News) =>
+    isScheduled(n)
+      ? "bg-amber-100 text-amber-600"
+      : n.is_published ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
+
   if (loading) return <div className="p-6">読み込み中...</div>
 
   return (
@@ -135,8 +150,8 @@ export default function NewsPage() {
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-2 flex-1 cursor-pointer" onClick={() => setSelected(n)}>
                   {n.is_important && <span className="text-xs bg-red-500 text-white px-2 py-0.5 rounded-full">❗ 重要</span>}
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${n.is_published ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
-                    {n.is_published ? "公開中" : "非公開"}
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${statusClass(n)}`}>
+                    {statusLabel(n)}
                   </span>
                   <span className="text-xs text-gray-400">{formatDate(n.published_at ?? n.created_at)}</span>
                   <p className="font-medium text-gray-800 truncate">{n.title}</p>
@@ -168,8 +183,8 @@ export default function NewsPage() {
           </div>
           <div className="flex items-center gap-2 mb-2">
             {selected.is_important && <span className="text-xs bg-red-500 text-white px-2 py-0.5 rounded-full">❗ 重要</span>}
-            <span className={`text-xs px-2 py-0.5 rounded-full ${selected.is_published ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
-              {selected.is_published ? "公開中" : "非公開"}
+            <span className={`text-xs px-2 py-0.5 rounded-full ${statusClass(selected)}`}>
+              {statusLabel(selected)}
             </span>
           </div>
           <h2 className="text-xl font-bold mb-1">{selected.title}</h2>
