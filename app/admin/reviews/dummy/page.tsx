@@ -135,6 +135,8 @@ export default function DummyReviewsPage() {
     return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`
   }
 
+  const isScheduled = (r: DummyReview) => new Date(r.created_at).getTime() > Date.now()
+
   if (loading) return <div className="p-6">読み込み中...</div>
 
   return (
@@ -154,6 +156,9 @@ export default function DummyReviewsPage() {
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-yellow-400 text-lg">{"★".repeat(r.satisfaction)}{"☆".repeat(5 - r.satisfaction)}</span>
                 <span className="text-sm text-gray-500">{formatDate(r.created_at)}</span>
+                {isScheduled(r) && (
+                  <span className="text-xs bg-amber-100 text-amber-600 rounded-full px-2 py-0.5">予約中</span>
+                )}
                 {r.source_type && SOURCE_LABEL[r.source_type] && (
                   <span className="text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-2 py-0.5">{SOURCE_LABEL[r.source_type]}</span>
                 )}
@@ -241,7 +246,7 @@ export default function DummyReviewsPage() {
                 onChange={e => setCreatedAt(e.target.value)}
                 className="w-full border rounded px-3 py-2 text-sm"
               />
-              <p className="text-xs text-gray-400 mt-1">空欄の場合は現在時刻</p>
+              <p className="text-xs text-gray-400 mt-1">空欄の場合は現在時刻。未来の日時にすると、その時刻まで公開されません（予約投稿）</p>
             </div>
 
             <div className="flex justify-between">
