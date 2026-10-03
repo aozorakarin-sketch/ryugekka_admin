@@ -14,12 +14,25 @@ const TAG_LIST = [
   "#仕事・職場", "#人間関係", "#家族", "#金運", "#健康"
 ]
 
+// 口コミの種類（reviews.source_type に入れる値）
+const SOURCE_OPTIONS = [
+  { value: "", label: "なし（バッジを出さない）" },
+  { value: "ryugekka", label: "電話" },
+  { value: "chat", label: "チャット" },
+  { value: "mail", label: "メール" },
+  { value: "premium", label: "プレミアム" },
+]
+const SOURCE_LABEL: Record<string, string> = {
+  ryugekka: "電話", chat: "チャット", mail: "メール", premium: "プレミアム",
+}
+
 type DummyReview = {
   id: string
   satisfaction: number
   comment: string | null
   created_at: string
   tags: string[]
+  source_type: string | null
 }
 
 export default function DummyReviewsPage() {
@@ -33,6 +46,7 @@ export default function DummyReviewsPage() {
   const [comment, setComment] = useState("")
   const [createdAt, setCreatedAt] = useState("")
   const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [sourceType, setSourceType] = useState("")
   const [saving, setSaving] = useState(false)
 
   useEffect(() => { init() }, [])
@@ -50,7 +64,7 @@ export default function DummyReviewsPage() {
     setLoading(true)
     const { data } = await supabase
       .from("reviews")
-      .select("id, satisfaction, comment, created_at, tags")
+      .select("id, satisfaction, comment, created_at, tags, source_type")
       .eq("teacher_id", teacherId)
       .eq("data_source", "dummy")
       .order("created_at", { ascending: false })
@@ -72,6 +86,7 @@ export default function DummyReviewsPage() {
     setComment("")
     setCreatedAt("")
     setSelectedTags([])
+    setSourceType("")
     setShowModal(true)
   }
 
@@ -81,6 +96,7 @@ export default function DummyReviewsPage() {
     setComment(r.comment ?? "")
     setCreatedAt(r.created_at.slice(0, 16))
     setSelectedTags(r.tags ?? [])
+    setSourceType(r.source_type ?? "")
     setShowModal(true)
   }
 
@@ -94,6 +110,7 @@ export default function DummyReviewsPage() {
       created_at: createdAt ? new Date(createdAt).toISOString() : new Date().toISOString(),
       data_source: "dummy",
       tags: selectedTags,
+      source_type: sourceType || null,
     }
     if (editTarget) {
       await supabase.from("reviews").update(payload).eq("id", editTarget.id)
@@ -135,6 +152,9 @@ export default function DummyReviewsPage() {
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-yellow-400 text-lg">{"★".repeat(r.satisfaction)}{"☆".repeat(5 - r.satisfaction)}</span>
                 <span className="text-sm text-gray-500">{formatDate(r.created_at)}</span>
+                {r.source_type && SOURCE_LABEL[r.source_type] && (
+                  <span className="text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-2 py-0.5">{SOURCE_LABEL[r.source_type]}</span>
+                )}
               </div>
               {r.tags?.length > 0 && (
                 <div className="flex flex-wrap gap-1 mb-2">
@@ -187,6 +207,17 @@ export default function DummyReviewsPage() {
                   >{tag}</button>
                 ))}
               </div>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium mb-1">種類（バッジ）</label>
+              <select
+                value={sourceType}
+                onChange={e => setSourceType(e.target.value)}
+                className="w-full border rounded px-3 py-2 text-sm bg-white"
+              >
+                {SOURCE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
             </div>
 
             <div className="mb-4">
