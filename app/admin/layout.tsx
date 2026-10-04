@@ -25,6 +25,7 @@ const menuItems = [
   { title: "ユーザー一覧", url: "/admin/users", icon: Users },
   { title: "フォローメール", url: "/admin/follow-mails", icon: Mic },
   { title: "フォローメール下書き", url: "/admin/follow-mails/drafts", icon: FileText },
+  { title: "先生メール送信専用", url: "/admin/teacher-mail", icon: Mail },
   { title: "つぶやき管理", url: "/admin/whispers", icon: Calendar },
   { title: "レビュー", url: "/admin/reviews", icon: Star },
   { title: "レビュー下書き", url: "/admin/reviews/drafts", icon: FileText },
