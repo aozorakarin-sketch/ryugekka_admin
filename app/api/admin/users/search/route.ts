@@ -15,26 +15,27 @@ const TEACHERS: Record<string, 'hana' | 'tsuki' | 'ryu'> = {
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
-  const q = searchParams.get('q') || ''
+  const raw = searchParams.get('q') || ''
+  // PostgRESTのフィルタ構文を壊す文字を除く
+  const q = raw.replace(/[%,()"\\]/g, ' ').trim()
 
-  const { data, error } = await supabase.auth.admin.listUsers()
+  if (!q) return NextResponse.json({ users: [] })
+
+  // ★auth.admin.listUsers() は最初の50人しか返さないため、
+  //   usersテーブルを直接検索する（名前＝handle_name またはメールアドレスの部分一致）
+  const { data: found, error } = await supabase
+    .from('users')
+    .select('id, email, handle_name')
+    .or(`handle_name.ilike.%${q}%,email.ilike.%${q}%`)
+    .limit(20)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const filtered = data.users
-    .filter(u => {
-      const name = u.user_metadata?.name || ''
-      return (
-        name.includes(q) ||
-        (u.email || '').includes(q)
-      )
-    })
-    .slice(0, 20)
-    .map(u => ({
-      id: u.id,
-      name: u.user_metadata?.name || u.email || '',
-      email: u.email || '',
-    }))
+  const filtered = (found ?? []).map(u => ({
+    id: u.id,
+    name: u.handle_name || u.email || '',
+    email: u.email || '',
+  }))
 
   const userIds = filtered.map(u => u.id)
 
