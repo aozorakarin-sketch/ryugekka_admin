@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { supabase } from '@/lib/supabaseClient'
 
 type PointType = 'common' | 'ryu' | 'tsuki' | 'hana'
 
@@ -15,6 +16,12 @@ const POINT_CONFIG: Record<PointType, { label: string; emoji: string }> = {
   ryu:    { label: '龍ポイント', emoji: '🐉' },
   tsuki:  { label: '月ポイント', emoji: '🌙' },
   hana:   { label: '花ポイント', emoji: '🌸' },
+}
+
+// APIにログイン情報を渡すためのトークン
+const getToken = async () => {
+  const { data: { session } } = await supabase.auth.getSession()
+  return session?.access_token ?? ''
 }
 
 export default function AdminPointsPage() {
@@ -37,7 +44,10 @@ export default function AdminPointsPage() {
     if (searchTimer) clearTimeout(searchTimer)
     if (!val) { setUsers([]); setShowDropdown(false); return }
     setSearchTimer(setTimeout(async () => {
-      const res = await fetch(`/api/admin/users/search?q=${encodeURIComponent(val)}`)
+      const token = await getToken()
+      const res = await fetch(`/api/admin/users/search?q=${encodeURIComponent(val)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
       const data = await res.json()
       setUsers(data.users || [])
       setShowDropdown(true)
@@ -60,9 +70,13 @@ export default function AdminPointsPage() {
     setLoading(true)
     setResult(null)
     try {
+      const token = await getToken()
       const res = await fetch('/api/admin/points/grant', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({
           user_id: selected.id,
           point_type: pointType,

@@ -13,7 +13,29 @@ const TEACHERS: Record<string, 'hana' | 'tsuki' | 'ryu'> = {
   '3ba85bb9-9065-461b-b76b-cc488d4c0c3b': 'ryu',
 }
 
+// 管理画面にログインできる人（app/admin/layout.tsx の ALLOWED_EMAILS と同じ）
+const ALLOWED_EMAILS = [
+  'bazvideo412@gmail.com',
+  'tomo517ko@gmail.com',
+  'aozora.karin@gmail.com',
+  'ohayo0840ohayo@gmail.com',
+]
+
+// リクエストのログイン情報（Bearerトークン）から、管理画面の利用者かを確認する
+async function isAdmin(req: NextRequest) {
+  const auth = req.headers.get('authorization') || ''
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : ''
+  if (!token) return false
+  const { data, error } = await supabase.auth.getUser(token)
+  if (error || !data.user?.email) return false
+  return ALLOWED_EMAILS.includes(data.user.email.toLowerCase())
+}
+
 export async function GET(req: NextRequest) {
+  if (!(await isAdmin(req))) {
+    return NextResponse.json({ error: '権限がありません' }, { status: 401 })
+  }
+
   const { searchParams } = new URL(req.url)
   const raw = searchParams.get('q') || ''
   // PostgRESTのフィルタ構文を壊す文字を除く
