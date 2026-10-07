@@ -5,23 +5,44 @@ import { supabase } from "@/lib/supabaseClient"
 import { Input } from "@/components/ui/input"
 import { Search } from "lucide-react"
 
+type Consultation = {
+  ended_at: string | null
+  teacher_id: string | null
+}
+
 type User = {
   id: string
   handle_name: string
   created_at: string
-  consultation_count: number
-  last_consultation_at: string | null
+  consultations: Consultation[]
   follow_mail_count: number
+}
+
+type Teacher = {
+  id: string
+  name: string
 }
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([])
+  const [teachers, setTeachers] = useState<Teacher[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
+  const [teacherId, setTeacherId] = useState("")
 
   useEffect(() => {
+    fetchTeachers()
     fetchUsers()
   }, [])
+
+  const fetchTeachers = async () => {
+    const { data } = await supabase.from("teachers").select("*")
+    const list: Teacher[] = (data ?? []).map((t: any) => ({
+      id: t.id,
+      name: t.name ?? t.display_name ?? t.handle_name ?? t.teacher_name ?? t.id,
+    }))
+    setTeachers(list)
+  }
 
   const fetchUsers = async () => {
     let allData: any[] = []
@@ -34,7 +55,7 @@ export default function UsersPage() {
           id,
           handle_name,
           created_at,
-          consultations(ended_at),
+          consultations(ended_at, teacher_id),
           follow_mails(count)
         `)
         .neq("data_source", "dummy")
@@ -46,50 +67,75 @@ export default function UsersPage() {
       from += 1000
     }
 
-    const formatted = allData.map((u: any) => {
-      const dates = u.consultations?.map((c: any) => c.ended_at).filter(Boolean) ?? []
-      const last = dates.sort().at(-1) ?? null
-
-      return {
-        id: u.id,
-        handle_name: u.handle_name,
-        created_at: u.created_at,
-        consultation_count: u.consultations?.length ?? 0,
-        follow_mail_count: u.follow_mails?.[0]?.count ?? 0,
-        last_consultation_at: last,
-      }
-    })
-
-    formatted.sort((a, b) => {
-      if (!a.last_consultation_at) return 1
-      if (!b.last_consultation_at) return -1
-      return b.last_consultation_at.localeCompare(a.last_consultation_at)
-    })
+    const formatted: User[] = allData.map((u: any) => ({
+      id: u.id,
+      handle_name: u.handle_name,
+      created_at: u.created_at,
+      consultations: u.consultations ?? [],
+      follow_mail_count: u.follow_mails?.[0]?.count ?? 0,
+    }))
 
     setUsers(formatted)
     setLoading(false)
   }
 
-  const filtered = users.filter(u =>
-    u.handle_name?.includes(search)
-  )
+  // 先生で絞り込んだときは、その先生との鑑定だけで回数・最終鑑定日を出す
+  const rows = users
+    .map((u) => {
+      const cs = teacherId
+        ? u.consultations.filter((c) => c.teacher_id === teacherId)
+        : u.consultations
+      const dates = cs.map((c) => c.ended_at).filter(Boolean) as string[]
+      const last = dates.sort().at(-1) ?? null
+      return {
+        id: u.id,
+        handle_name: u.handle_name,
+        consultation_count: cs.length,
+        follow_mail_count: u.follow_mail_count,
+        last_consultation_at: last,
+      }
+    })
+    .filter((r) => (teacherId ? r.consultation_count > 0 : true))
+    .filter((r) => (r.handle_name ?? "").includes(search))
+    .sort((a, b) => {
+      if (!a.last_consultation_at) return 1
+      if (!b.last_consultation_at) return -1
+      return b.last_consultation_at.localeCompare(a.last_consultation_at)
+    })
 
   if (loading) return <div className="p-6">読み込み中...</div>
 
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">ユーザー一覧（{users.length}人）</h1>
+        <h1 className="text-2xl font-bold">
+          ユーザー一覧（{teacherId ? `${rows.length}人 / 全${users.length}人` : `${users.length}人`}）
+        </h1>
       </div>
 
-      <div className="relative mb-4 max-w-sm">
-        <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-        <Input
-          placeholder="名前で検索..."
-          className="pl-9"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <div className="relative w-full max-w-sm">
+          <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+          <Input
+            placeholder="名前で検索..."
+            className="pl-9"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+
+        <select
+          value={teacherId}
+          onChange={(e) => setTeacherId(e.target.value)}
+          className="h-10 rounded-md border border-gray-300 bg-white px-3 text-sm"
+        >
+          <option value="">すべての先生</option>
+          {teachers.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="rounded-md border overflow-x-auto">
@@ -103,7 +149,7 @@ export default function UsersPage() {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((user, i) => (
+            {rows.map((user, i) => (
               <tr key={user.id} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                 <td className="px-4 py-3 font-medium">
                   <a href={`/admin/users/${user.id}`} className="hover:underline text-blue-600">
