@@ -23,6 +23,9 @@ type Teacher = {
   name: string
 }
 
+// どの先生とも鑑定記録が結び付いていないユーザー用の選択肢
+const OTHER = "__other__"
+
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([])
   const [teachers, setTeachers] = useState<Teacher[]>([])
@@ -80,11 +83,14 @@ export default function UsersPage() {
   }
 
   // 先生で絞り込んだときは、その先生との鑑定だけで回数・最終鑑定日を出す
+  const teacherIdSet = new Set(teachers.map((t) => t.id))
+
   const rows = users
     .map((u) => {
-      const cs = teacherId
-        ? u.consultations.filter((c) => c.teacher_id === teacherId)
-        : u.consultations
+      const cs =
+        teacherId && teacherId !== OTHER
+          ? u.consultations.filter((c) => c.teacher_id === teacherId)
+          : u.consultations
       const dates = cs.map((c) => c.ended_at).filter(Boolean) as string[]
       const last = dates.sort().at(-1) ?? null
       return {
@@ -93,9 +99,18 @@ export default function UsersPage() {
         consultation_count: cs.length,
         follow_mail_count: u.follow_mail_count,
         last_consultation_at: last,
+        is_other: !u.consultations.some(
+          (c) => c.teacher_id && teacherIdSet.has(c.teacher_id)
+        ),
       }
     })
-    .filter((r) => (teacherId ? r.consultation_count > 0 : true))
+    .filter((r) =>
+      teacherId === OTHER
+        ? r.is_other
+        : teacherId
+        ? r.consultation_count > 0
+        : true
+    )
     .filter((r) => (r.handle_name ?? "").includes(search))
     .sort((a, b) => {
       if (!a.last_consultation_at) return 1
@@ -135,6 +150,7 @@ export default function UsersPage() {
               {t.name}
             </option>
           ))}
+          <option value={OTHER}>その他</option>
         </select>
       </div>
 
