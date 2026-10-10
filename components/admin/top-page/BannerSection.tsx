@@ -10,6 +10,7 @@ type Banner = {
   link_url: string | null;
   display_order: number;
   is_active: boolean;
+  open_in_new_tab: boolean;
 };
 
 async function uploadImage(file: File, pathPrefix: string): Promise<string> {
@@ -132,6 +133,23 @@ export function BannerSection() {
     });
   };
 
+  // 「別タブで開く」のON/OFF切り替え（画面は先に更新し、保存に失敗したら元に戻す）
+  const handleCarouselNewTabChange = async (id: string, open_in_new_tab: boolean) => {
+    setCarouselBanners((prev) =>
+      prev.map((b) => (b.id === id ? { ...b, open_in_new_tab } : b))
+    );
+    const res = await fetch("/api/admin/top-page/banners", {
+      method: "PATCH",
+      body: JSON.stringify({ id, open_in_new_tab }),
+    });
+    if (!res.ok) {
+      setCarouselBanners((prev) =>
+        prev.map((b) => (b.id === id ? { ...b, open_in_new_tab: !open_in_new_tab } : b))
+      );
+      alert("保存に失敗しました");
+    }
+  };
+
   if (loading) {
     return <div className="text-sm text-gray-400">読み込み中...</div>;
   }
@@ -181,6 +199,8 @@ export function BannerSection() {
           サイト内で順番に切り替わるバナー（複数登録可）
           <br />
           推奨サイズ：2048×768px（トップバナーと同サイズ）
+          <br />
+          Instagram・X・LINEなどの外部サイトは、「別タブで開く」にチェックを入れてください（チェックなしだと表示されません）
         </p>
         <div className="space-y-3">
           {carouselBanners.map((banner, index) => (
@@ -218,6 +238,16 @@ export function BannerSection() {
                 onBlur={(e) => handleCarouselLinkChange(banner.id, e.target.value)}
                 className="flex-1 text-sm border border-gray-300 rounded px-2 py-1.5"
               />
+              <label className="flex items-center gap-1 text-xs text-gray-700 cursor-pointer shrink-0">
+                <input
+                  type="checkbox"
+                  checked={banner.open_in_new_tab ?? false}
+                  onChange={(e) =>
+                    handleCarouselNewTabChange(banner.id, e.target.checked)
+                  }
+                />
+                別タブで開く
+              </label>
               <label className="text-xs text-blue-600 hover:text-blue-800 cursor-pointer shrink-0">
                 {uploading ? "アップロード中..." : "差し替える"}
                 <input
