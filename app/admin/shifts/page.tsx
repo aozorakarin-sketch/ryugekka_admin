@@ -64,6 +64,9 @@ export default function ShiftsPage() {
     return days
   }
 
+  const makeDateStr = (day: number) =>
+    `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+
   const toggleCell = (dateStr: string, hour: number) => {
     const key = `${dateStr}_${hour}`
     const newShifts = new Set(shifts)
@@ -72,6 +75,24 @@ export default function ShiftsPage() {
     } else {
       newShifts.delete(key)
     }
+    setShifts(newShifts)
+  }
+
+  // 横一列（1日分の0〜23時）を一括切り替え：全部ONなら全解除、そうでなければ全部ON
+  const toggleRow = (dateStr: string) => {
+    const keys = HOURS.map(h => `${dateStr}_${h}`)
+    const allOn = keys.every(k => shifts.has(k))
+    const newShifts = new Set(shifts)
+    keys.forEach(k => (allOn ? newShifts.delete(k) : newShifts.add(k)))
+    setShifts(newShifts)
+  }
+
+  // 縦一列（1つの時間帯を全日分）を一括切り替え：全部ONなら全解除、そうでなければ全部ON
+  const toggleColumn = (hour: number) => {
+    const keys = days.map(({ day }) => `${makeDateStr(day)}_${hour}`)
+    const allOn = keys.every(k => shifts.has(k))
+    const newShifts = new Set(shifts)
+    keys.forEach(k => (allOn ? newShifts.delete(k) : newShifts.add(k)))
     setShifts(newShifts)
   }
 
@@ -157,56 +178,72 @@ export default function ShiftsPage() {
         </button>
       </div>
 
+      <p className="text-xs text-gray-500 mb-2 text-right">
+        日付を押すと横一列、時間（0〜23）を押すと縦一列をまとめて ON / OFF できます
+      </p>
+
       <div className="overflow-x-auto">
         <table className="border-collapse text-xs">
           <thead>
             <tr>
               <th className="border bg-gray-800 text-white px-1 py-1 w-16 sticky left-0 z-10"></th>
               {HOURS.map(h => (
-                <th key={h} className="border bg-gray-800 text-white px-1 py-1 w-8 text-center">{h}</th>
+                <th
+                  key={h}
+                  onClick={() => toggleColumn(h)}
+                  title={`${h}時を全日まとめて切り替え`}
+                  className="border bg-gray-800 text-white px-1 py-1 w-8 text-center cursor-pointer select-none hover:bg-teal-600"
+                >
+                  {h}
+                </th>
               ))}
             </tr>
           </thead>
           <tbody>
             {days.map(({ day, dayOfWeek }) => {
-              const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+              const dateStr = makeDateStr(day)
               const rowShiftCount = HOURS.filter(h => shifts.has(`${dateStr}_${h}`)).length
               return (
-<tr key={day}>
-  <td className={`border w-8 h-7 text-center cursor-pointer select-none sticky left-0 z-10 ${
-    rowShiftCount > 0 ? "bg-orange-200" :
-    dayOfWeek === "土" ? "bg-blue-50" :
-    dayOfWeek === "日" ? "bg-red-50" :
-    "bg-white"
-  }`}>
-    <span className={
-      dayOfWeek === "土" ? "text-blue-400" :
-      dayOfWeek === "日" ? "text-red-400" :
-      "text-gray-700"
-    }>
-      {day}({dayOfWeek})
-    </span>
-    <span className="ml-1 text-gray-400">{rowShiftCount}</span>
-  </td>
-  {HOURS.map(h => {
-    const key = `${dateStr}_${h}`
-    const checked = shifts.has(key)
-    return (
-      <td
-        key={h}
-        onClick={() => toggleCell(dateStr, h)}
-        className={`border w-8 h-7 text-center cursor-pointer select-none ${
-          checked ? "bg-orange-300" :
-          dayOfWeek === "土" ? "bg-blue-50 hover:bg-blue-100" :
-          dayOfWeek === "日" ? "bg-red-50 hover:bg-red-100" :
-          "bg-white hover:bg-orange-100"
-        }`}
-      >
-        {checked && <span className="text-white text-xs">✓</span>}
-      </td>
-    )
-  })}
-</tr>              )
+                <tr key={day}>
+                  <td
+                    onClick={() => toggleRow(dateStr)}
+                    title="この日を全時間まとめて切り替え"
+                    className={`border w-8 h-7 text-center cursor-pointer select-none sticky left-0 z-10 hover:brightness-95 ${
+                      rowShiftCount > 0 ? "bg-orange-200" :
+                      dayOfWeek === "土" ? "bg-blue-50" :
+                      dayOfWeek === "日" ? "bg-red-50" :
+                      "bg-white"
+                    }`}
+                  >
+                    <span className={
+                      dayOfWeek === "土" ? "text-blue-400" :
+                      dayOfWeek === "日" ? "text-red-400" :
+                      "text-gray-700"
+                    }>
+                      {day}({dayOfWeek})
+                    </span>
+                    <span className="ml-1 text-gray-400">{rowShiftCount}</span>
+                  </td>
+                  {HOURS.map(h => {
+                    const key = `${dateStr}_${h}`
+                    const checked = shifts.has(key)
+                    return (
+                      <td
+                        key={h}
+                        onClick={() => toggleCell(dateStr, h)}
+                        className={`border w-8 h-7 text-center cursor-pointer select-none ${
+                          checked ? "bg-orange-300" :
+                          dayOfWeek === "土" ? "bg-blue-50 hover:bg-blue-100" :
+                          dayOfWeek === "日" ? "bg-red-50 hover:bg-red-100" :
+                          "bg-white hover:bg-orange-100"
+                        }`}
+                      >
+                        {checked && <span className="text-white text-xs">✓</span>}
+                      </td>
+                    )
+                  })}
+                </tr>
+              )
             })}
           </tbody>
         </table>
