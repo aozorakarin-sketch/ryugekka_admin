@@ -37,6 +37,8 @@ export default function ConsultationModal({ consultation, userName, teacherName,
   const [generatingAfter, setGeneratingAfter] = useState(false)
   const [afterError, setAfterError] = useState<string | null>(null)
   const [afterDone, setAfterDone] = useState(false)
+  const [downloadingAudio, setDownloadingAudio] = useState(false)
+  const [audioError, setAudioError] = useState<string | null>(null)
 
   const isChat = consultation.data_source === "chat"
 
@@ -198,6 +200,34 @@ export default function ConsultationModal({ consultation, userName, teacherName,
     URL.revokeObjectURL(url)
   }
 
+  // 音声ファイルのダウンロード（署名つきURLから取得して、ファイルとして保存する）
+  const handleDownloadAudio = async () => {
+    if (!consultation.signed_url) return
+    setDownloadingAudio(true)
+    setAudioError(null)
+    try {
+      const res = await fetch(consultation.signed_url)
+      if (!res.ok) throw new Error("音声の取得に失敗しました")
+      const blob = await res.blob()
+
+      const d = new Date(consultation.started_at)
+      const rawExt = consultation.recording_url?.split("?")[0].split(".").pop() ?? ""
+      const ext = /^[a-zA-Z0-9]{2,4}$/.test(rawExt) ? rawExt.toLowerCase() : "mp3"
+      const fileName = `${userName}_${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}_audio.${ext}`
+
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = fileName
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err: any) {
+      setAudioError(err.message ?? "ダウンロードに失敗しました")
+    } finally {
+      setDownloadingAudio(false)
+    }
+  }
+
   const hasTranscript = transcript.trim().length > 0
 
   return (
@@ -226,8 +256,35 @@ export default function ConsultationModal({ consultation, userName, teacherName,
           {/* 音声プレイヤー（電話のみ） */}
           {!isChat && consultation.signed_url && (
             <div className="bg-gray-50 rounded-lg p-3 border">
-              <div className="text-xs font-medium text-gray-500 mb-2">🎵 音声</div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-xs font-medium text-gray-500">🎵 音声</div>
+                {/* ダウンロードは担当の先生本人のみ（音声のコピーが外に出るため） */}
+                {canEdit && (
+                  <button
+                    onClick={handleDownloadAudio}
+                    disabled={downloadingAudio}
+                    className="text-xs px-3 py-1 rounded font-medium bg-gray-200 hover:bg-gray-300 text-gray-700 disabled:opacity-50"
+                  >
+                    {downloadingAudio ? "⌛ 準備中..." : "⬇ 音声をDL"}
+                  </button>
+                )}
+              </div>
               <audio src={consultation.signed_url} controls className="w-full" />
+              {audioError && (
+                <div className="text-xs text-red-500 mt-2 bg-red-50 p-2 rounded">{audioError}</div>
+              )}
+            </div>
+          )}
+
+          {/* 録音がないとき・読み込めなかったときの説明（電話のみ） */}
+          {!isChat && !consultation.signed_url && (
+            <div className="bg-gray-50 rounded-lg p-3 border">
+              <div className="text-xs font-medium text-gray-500 mb-1">🎵 音声</div>
+              <div className="text-xs text-gray-400">
+                {consultation.recording_url
+                  ? "録音の読み込みに失敗しました。ページを再読み込みしてください。"
+                  : "この鑑定には録音データがありません。"}
+              </div>
             </div>
           )}
 
