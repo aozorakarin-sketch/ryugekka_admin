@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabaseClient"
 import { useRouter, usePathname } from "next/navigation"
 import { useEffect, useState } from "react"
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
-import { LayoutDashboard, Users, MessageSquare, Mic, Calendar, Settings, LogOut, Star, FileText, Phone, Bell, Coins, Newspaper, HelpCircle, Mail, TrendingUp, Image as ImageIcon, LayoutGrid, Send, ShoppingBag, LineChart, ShieldCheck, Gift, Crown, UserPlus } from "lucide-react"
+import { LayoutDashboard, Users, MessageSquare, Mic, Calendar, Settings, LogOut, Star, FileText, Phone, Bell, Coins, Newspaper, HelpCircle, Mail, TrendingUp, Image as ImageIcon, LayoutGrid, Send, ShoppingBag, LineChart, ShieldCheck, Gift, Crown, UserPlus, Video } from "lucide-react"
 
 const ALLOWED_EMAILS = [
   'bazvideo412@gmail.com',
@@ -20,7 +20,7 @@ const menuItems = [
   { title: "お知らせ", url: "/admin/announcements", icon: Bell },
   { title: "ニュース管理", url: "/admin/news", icon: Newspaper },
   { title: "お問い合わせ", url: "/admin/contact", icon: HelpCircle },
- { title: "メール鑑定", url: "/admin/fortune-requests", icon: Mail },
+  { title: "メール鑑定", url: "/admin/fortune-requests", icon: Mail },
   { title: "鑑定履歴", url: "/admin/consultations", icon: MessageSquare },
   { title: "ユーザー一覧", url: "/admin/users", icon: Users },
   { title: "フォローメール", url: "/admin/follow-mails", icon: Mic },
@@ -42,6 +42,7 @@ const menuItems = [
   { title: "ショップ管理", url: "/admin/shop", icon: ShoppingBag },
   { title: "得トラカ交換所", url: "/admin/exchange", icon: Gift },
   { title: "友達紹介", url: "/admin/referrals", icon: UserPlus },
+  { title: "モニター応募", url: "/admin/monitor", icon: Video },
   { title: "有料メニュー管理", url: "/admin/premium-menus", icon: Crown },
   { title: "成果確認", url: "/admin/performance", icon: LineChart },
 ]
