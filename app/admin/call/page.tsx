@@ -4,14 +4,15 @@ import { useEffect, useRef, useState } from "react"
 import { supabase } from "@/lib/supabaseClient"
 import { formatJST } from "@/lib/utils"
 
-const APP_ID = "8a10ad2855b44c9aa6cbed991ea48d86"
-
 const EMAIL_TO_TEACHER: Record<string, { id: string; name: string; channel: string }> = {
   "aozora.karin@gmail.com": { id: "cd2c4101-2e24-4ae2-8d6a-507a943904af", name: "青空花林", channel: "karin" },
   "tomo517ko@gmail.com": { id: "17cf0ca1-7526-466e-a644-9d3efefa4091", name: "椎名架月", channel: "katsuki" },
   "bazvideo412@gmail.com": { id: "3ba85bb9-9065-461b-b76b-cc488d4c0c3b", name: "龍蓮", channel: "renren" },
   "ohayo0840ohayo@gmail.com": { id: "e482fff7-25db-483d-8d68-46a893403be3", name: "宝明里茉", channel: "rioma" },
 }
+
+// ★クラウド録音の録音ボットのUID（通話の参加者ではないので、出入りしても通話を切らない）
+const RECORDING_BOT_UID = "2000000001"
 
 type WaitingEntry = {
   id: string
@@ -39,7 +40,6 @@ export default function CallPage() {
   const [callTime, setCallTime] = useState(0)
   const [teacher, setTeacher] = useState<{ id: string; name: string; channel: string } | null>(null)
   const [recordings, setRecordings] = useState<Recording[]>([])
-  const [uploading, setUploading] = useState(false)
   const [playingId, setPlayingId] = useState<string | null>(null)
   const [waitingCount, setWaitingCount] = useState(0)
   const [waitingList, setWaitingList] = useState<WaitingEntry[]>([])
@@ -53,9 +53,6 @@ export default function CallPage() {
   const clientRef = useRef<any>(null)
   const localTrackRef = useRef<any>(null)
   const remoteTrackRef = useRef<any>(null)
-  const recorderRef = useRef<MediaRecorder | null>(null)
-  const chunksRef = useRef<Blob[]>([])
-  const audioContextRef = useRef<AudioContext | null>(null)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const callRingRef = useRef<HTMLAudioElement | null>(null)
@@ -74,7 +71,6 @@ export default function CallPage() {
       stopCallRing()
       stopAlertRing()
       clearAlertTimer()
-      if (audioContextRef.current) audioContextRef.current.close()
     }
   }, [])
 
@@ -195,34 +191,47 @@ export default function CallPage() {
     setTimeout(() => { setToasts(prev => prev.slice(1)) }, 6000)
   }
 
-  const startMixedRecording = (localTrack: any, remoteTrack: any) => {
+  // ★ アゴラのクラウド録音を開始する（録音はアゴラのサーバー側で行う）
+  //   失敗しても通話は続けられる
+  const startRecording = async (queueId: string) => {
     try {
-      const audioContext = new AudioContext()
-      audioContextRef.current = audioContext
-      const destination = audioContext.createMediaStreamDestination()
-      const localStream = new MediaStream([localTrack.getMediaStreamTrack()])
-      const localSource = audioContext.createMediaStreamSource(localStream)
-      localSource.connect(destination)
-      if (remoteTrack) {
-        const remoteStream = new MediaStream([remoteTrack.getMediaStreamTrack()])
-        const remoteSource = audioContext.createMediaStreamSource(remoteStream)
-        remoteSource.connect(destination)
+      const { data, error } = await supabase.functions.invoke("agora-recording", {
+        body: { action: "start", queue_id: queueId },
+      })
+      if (error || !data?.ok) {
+        console.error("録音開始エラー:", error ?? data)
+        addToast("⚠️ 録音を開始できませんでした（通話は続けられます）", "warning")
       }
-      const recorder = new MediaRecorder(destination.stream)
-      chunksRef.current = []
-      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data) }
-      recorder.start()
-      recorderRef.current = recorder
     } catch (err) {
       console.error("録音開始エラー:", err)
+      addToast("⚠️ 録音を開始できませんでした（通話は続けられます）", "warning")
     }
   }
 
-  const joinAgora = async () => {
+  // ★ クラウド録音を止めて、録音履歴に登録する
+  const stopRecording = async (queueId: string, consultationId: string | null, duration: number) => {
+    try {
+      const { data, error } = await supabase.functions.invoke("agora-recording", {
+        body: { action: "stop", queue_id: queueId, consultation_id: consultationId, duration },
+      })
+      if (error || !data?.ok) {
+        console.error("録音停止エラー:", error ?? data)
+        addToast("⚠️ 録音の保存に失敗した可能性があります", "warning")
+        return
+      }
+      if (teacherRef.current) fetchRecordings(teacherRef.current.id)
+    } catch (err) {
+      console.error("録音停止エラー:", err)
+      addToast("⚠️ 録音の保存に失敗した可能性があります", "warning")
+    }
+  }
+
+  const joinAgora = async (queueId: string) => {
     if (!teacherRef.current) return
     try {
       const AgoraRTC = (await import("agora-rtc-sdk-ng")).default
-      const token = await getToken(teacherRef.current.channel)
+      // ★ 先生ごとのアゴラプロジェクトのトークンとApp IDを、Edge Function(agora-token)から受け取る
+      const { token, appId } = await getToken(teacherRef.current.channel)
       const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" })
       clientRef.current = client
       client.on("user-published", async (remoteUser: any, mediaType: "audio" | "video") => {
@@ -230,14 +239,19 @@ export default function CallPage() {
         if (mediaType === "audio") {
           remoteUser.audioTrack.play()
           remoteTrackRef.current = remoteUser.audioTrack
-          if (localTrackRef.current) startMixedRecording(localTrackRef.current, remoteUser.audioTrack)
         }
       })
-      client.on("user-left", async () => { await endCall() })
-      await client.join(APP_ID, teacherRef.current.channel, token, null)
+      // ★ 録音ボットが出入りしても通話を切らない（お客様が退出したときだけ終話する）
+      client.on("user-left", async (leftUser: any) => {
+        if (String(leftUser?.uid) === RECORDING_BOT_UID) return
+        await endCall()
+      })
+      await client.join(appId, teacherRef.current.channel, token, null)
       const localTrack = await AgoraRTC.createMicrophoneAudioTrack()
       localTrackRef.current = localTrack
       await client.publish([localTrack])
+      // ★ 通話がつながったので、クラウド録音を開始する
+      startRecording(queueId)
     } catch (err: any) {
       console.error(err)
       updateStatus("idle")
@@ -288,7 +302,7 @@ export default function CallPage() {
             updateStatus("connected")
             setCurrentQueueId(entryId)
             await new Promise(resolve => setTimeout(resolve, 500))
-            await joinAgora()
+            await joinAgora(entryId)
             startTimer()
           }
         }
@@ -382,15 +396,6 @@ export default function CallPage() {
     stopAlertRing()
     clearAlertTimer()
 
-    if (recorderRef.current && recorderRef.current.state !== "inactive") {
-      recorderRef.current.stop()
-      recorderRef.current.onstop = async () => {
-        const blob = new Blob(chunksRef.current, { type: "audio/webm" })
-        await uploadRecording(blob, duration)
-      }
-    }
-
-    if (audioContextRef.current) { audioContextRef.current.close(); audioContextRef.current = null }
     if (localTrackRef.current) { localTrackRef.current.close(); localTrackRef.current = null }
     if (clientRef.current) { await clientRef.current.leave(); clientRef.current = null }
     remoteTrackRef.current = null
@@ -406,6 +411,7 @@ export default function CallPage() {
           .eq("id", queueId)
       }
 
+      let consultationId: string | null = null
       if (existing?.user_id) {
         const now = new Date()
         const startedAt = existing.call_started_at
@@ -415,7 +421,7 @@ export default function CallPage() {
         const { data: userData } = await supabase
           .from("users").select("handle_name").eq("id", existing.user_id).single()
 
-        await supabase.from("consultations").insert({
+        const { data: consultation } = await supabase.from("consultations").insert({
           user_id: existing.user_id,
           teacher_id: teacherRef.current.id,
           started_at: startedAt.toISOString(),
@@ -425,8 +431,13 @@ export default function CallPage() {
           user_name: userData?.handle_name ?? null,
           teacher_name: teacherRef.current.name,
           data_source: "ryugekka",
-        })
+        }).select("id").single()
+        consultationId = consultation?.id ?? null
       }
+
+      // ★ クラウド録音を止めて、この鑑定に録音を紐付ける（待たずに裏で進める）
+      stopRecording(queueId, consultationId, duration)
+
       setCurrentQueueId(null)
     }
 
@@ -447,13 +458,14 @@ export default function CallPage() {
     setRecordings(data ?? [])
   }
 
+  // ★ 先生ごとのアゴラプロジェクトのトークンとApp IDを、Edge Function(agora-token)から受け取る
   const getToken = async (channelName: string) => {
-    const res = await fetch("/api/agora-token", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ channelName, uid: 0 }),
+    const { data, error } = await supabase.functions.invoke("agora-token", {
+      body: { channelName },
     })
-    const data = await res.json()
-    return data.token
+    if (error) throw new Error(error.message)
+    if (!data || data.error) throw new Error(data?.error || "トークンを取得できませんでした")
+    return { token: data.token as string, appId: data.appId as string }
   }
 
   const startTimer = () => {
@@ -478,22 +490,6 @@ export default function CallPage() {
     return `${Math.floor(diff / 60)}分前`
   }
 
-  const uploadRecording = async (blob: Blob, duration: number) => {
-    if (!teacher) return
-    setUploading(true)
-    try {
-      const fileName = `${teacher.id}/${new Date().toISOString().replace(/[:.]/g, "-")}.webm`
-      const { error } = await supabase.storage.from("recordings").upload(fileName, blob, { contentType: "audio/webm" })
-      if (error) throw error
-      await supabase.from("call_recordings").insert({
-        teacher_id: teacher.id, recording_url: fileName,
-        recording_duration: duration, created_at: new Date().toISOString(), data_source: "ryugekka",
-      })
-      await fetchRecordings(teacher.id)
-    } catch (err) { console.error("アップロードエラー:", err) }
-    setUploading(false)
-  }
-
   const getSignedUrl = async (filePath: string) => {
     const { data } = await supabase.storage.from("recordings").createSignedUrl(filePath, 3600)
     return data?.signedUrl
@@ -514,9 +510,11 @@ export default function CallPage() {
   const downloadRecording = async (rec: Recording) => {
     const url = await getSignedUrl(rec.recording_url)
     if (!url) return
+    // ★ クラウド録音は mp4、これまでのブラウザ録音は webm なので、元の拡張子を使う
+    const ext = rec.recording_url.split(".").pop() || "mp4"
     const a = document.createElement("a")
     a.href = url
-    a.download = `通話録音_${rec.created_at.slice(0, 16).replace("T", "_")}.webm`
+    a.download = `通話録音_${rec.created_at.slice(0, 16).replace("T", "_")}.${ext}`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
@@ -616,7 +614,6 @@ export default function CallPage() {
             </button>
           </div>
         )}
-        {uploading && <p className="text-xs text-gray-400 mt-4">録音をアップロード中...</p>}
       </div>
 
       {waitingList.length > 0 && (
