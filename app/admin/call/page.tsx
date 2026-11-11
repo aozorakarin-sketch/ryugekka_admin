@@ -391,6 +391,8 @@ export default function CallPage() {
 
   const endCall = async () => {
     const duration = callTimeRef.current
+    // ★ お客様が応答して実際につながっていたか（呼び出し中のまま切った＝取りこぼしは false）
+    const wasConnected = statusRef.current === "connected"
     stopTimer()
     stopCallRing()
     stopAlertRing()
@@ -401,6 +403,25 @@ export default function CallPage() {
     remoteTrackRef.current = null
 
     const queueId = currentQueueId || callingEntryIdRef.current
+
+    // ★ つながらなかった通話（取りこぼし）は鑑定履歴を作らない＝1分も課金されない
+    if (!wasConnected) {
+      if (queueId) {
+        await supabase.from("waiting_queue")
+          .update({ status: "cancelled", call_ended_at: new Date().toISOString() })
+          .eq("id", queueId)
+      }
+      setCurrentQueueId(null)
+      callingEntryIdRef.current = null
+      setCallingEntryId(null)
+      updateStatus("idle")
+      setCallTime(0)
+      callTimeRef.current = 0
+      setMuted(false)
+      if (teacherRef.current) fetchWaitingList(teacherRef.current.id)
+      return
+    }
+
     if (queueId && teacherRef.current) {
       const { data: existing } = await supabase
         .from("waiting_queue").select("end_reason, user_id, call_started_at").eq("id", queueId).single()
