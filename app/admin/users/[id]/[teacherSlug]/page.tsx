@@ -227,8 +227,15 @@ export default function UserDetailPage() {
         .eq("teacher_id", pageTeacherId)
         .order("started_at", { ascending: false })
 
+      // 龍月花の電話は日時がUTCのまま保存されているため、UTCとして読み替える
+      // （みんでん等の古いデータは日本時間で入っているので、そのまま）
+      const fixUtc = (s: string | null, src: string | null) =>
+        s && src === "ryugekka" && !/[zZ]$|[+-]\d\d:?\d\d$/.test(s) ? s + "Z" : s
+
       const consultationListRaw = (cons ?? []).map((c: any) => ({
         ...c,
+        started_at: fixUtc(c.started_at, c.data_source),
+        ended_at: fixUtc(c.ended_at, c.data_source),
         recording_url: c.call_recordings?.[0]?.recording_url ?? null,
         signed_url: null as string | null,
         price: (c.price != null && c.price > 0)
