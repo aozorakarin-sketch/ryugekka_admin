@@ -78,7 +78,7 @@ export default function FollowMailNewPage() {
   const saveDraft = async (): Promise<string | null> => {
     if (!teacher) return null
     setSaving(true)
-    const subject = `【龍月花】${teacher.name}先生からフォローメールが届いております`
+    const subject = `【チョコ鑑】${teacher.name}先生からフォローメールが届いております`
 
     let currentDraftId = draftId
 
@@ -112,7 +112,7 @@ export default function FollowMailNewPage() {
     router.push(`/admin/follow-mails/confirm/${userId}?draftId=${currentDraftId}`)
   }
 
-  const subject = teacher ? `【龍月花】${teacher.name}先生からフォローメールが届いております` : ""
+  const subject = teacher ? `【チョコ鑑】${teacher.name}先生からフォローメールが届いております` : ""
 
   if (loading) return <div className="p-6">読み込み中...</div>
 
