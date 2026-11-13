@@ -105,6 +105,18 @@ type AccessStats = {
   top: TrafficCount
 }
 
+type MonthlyStat = {
+  month: string
+  new_users: number
+  logged_in_users: number | null
+  total_users: number
+  site_visitors: number | null
+  site_pageviews: number | null
+  top_visitors: number | null
+  top_pageviews: number | null
+  saved_at: string
+}
+
 function StatTile({ label, value, unit, sub }: { label: string; value: number | null; unit: string; sub?: string }) {
   return (
     <div className="px-4 py-3">
@@ -154,6 +166,7 @@ export default function DashboardPage() {
   const [loadingSiteStats, setLoadingSiteStats] = useState(true)
   const [accessStats, setAccessStats] = useState<AccessStats | null>(null)
   const [loadingAccessStats, setLoadingAccessStats] = useState(true)
+  const [monthlyStats, setMonthlyStats] = useState<MonthlyStat[]>([])
 
   useEffect(() => {
     init()
@@ -180,7 +193,15 @@ export default function DashboardPage() {
       fetchPendingShopOrders(t.id),
       fetchSiteLoginStats(),
       fetchAccessStats(),
+      fetchMonthlyStats(),
     ])
+  }
+
+  const fetchMonthlyStats = async () => {
+    const { data, error } = await supabase.rpc("get_monthly_stats")
+    if (!error && data) {
+      setMonthlyStats(data as MonthlyStat[])
+    }
   }
 
   const fetchSiteLoginStats = async () => {
@@ -493,6 +514,54 @@ export default function DashboardPage() {
             </p>
           </>
         )}
+      </div>
+
+      {/* 過去の月ごとの記録（毎月末に自動保存） */}
+      <div className="border rounded-lg bg-white overflow-hidden max-w-4xl mb-4">
+        <div className="px-4 py-3 bg-gray-50 border-b">
+          <h2 className="font-bold text-sm">月ごとの記録</h2>
+        </div>
+        {monthlyStats.length === 0 ? (
+          <div className="p-4 text-sm text-gray-400">毎月末の夜に自動で保存されます（まだ記録はありません）</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-xs text-gray-500 border-b">
+                  <th className="text-left font-normal px-4 py-2">月</th>
+                  <th className="text-right font-normal px-3 py-2">新規ログイン</th>
+                  <th className="text-right font-normal px-3 py-2">ログインした人</th>
+                  <th className="text-right font-normal px-3 py-2">累計登録者</th>
+                  <th className="text-right font-normal px-3 py-2">TOP訪問者</th>
+                  <th className="text-right font-normal px-3 py-2">TOP閲覧</th>
+                  <th className="text-right font-normal px-3 py-2">全体訪問者</th>
+                  <th className="text-right font-normal px-4 py-2">全体閲覧</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {monthlyStats.map(s => {
+                  const [yy, mm] = s.month.split("-")
+                  const num = (v: number | null) => (v === null ? "-" : v.toLocaleString())
+                  return (
+                    <tr key={s.month}>
+                      <td className="px-4 py-2 whitespace-nowrap">{yy}年{Number(mm)}月</td>
+                      <td className="px-3 py-2 text-right">{num(s.new_users)}</td>
+                      <td className="px-3 py-2 text-right">{num(s.logged_in_users)}</td>
+                      <td className="px-3 py-2 text-right">{num(s.total_users)}</td>
+                      <td className="px-3 py-2 text-right">{num(s.top_visitors)}</td>
+                      <td className="px-3 py-2 text-right">{num(s.top_pageviews)}</td>
+                      <td className="px-3 py-2 text-right">{num(s.site_visitors)}</td>
+                      <td className="px-4 py-2 text-right">{num(s.site_pageviews)}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <p className="px-4 py-2 text-xs text-gray-400 border-t">
+          ※各月の最終日の夜に保存した数字です。アクセス数は計測開始日（11/9）以降の分です。
+        </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl">
