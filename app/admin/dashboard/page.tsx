@@ -89,6 +89,35 @@ type PendingShopOrder = {
   product_name: string
 }
 
+type SiteLoginStats = {
+  new_users: number
+  logged_in_users: number
+  total_users: number
+}
+
+type TrafficCount = {
+  pageviews: number
+  visitors: number
+}
+
+type AccessStats = {
+  site: TrafficCount
+  top: TrafficCount
+}
+
+function StatTile({ label, value, unit, sub }: { label: string; value: number | null; unit: string; sub?: string }) {
+  return (
+    <div className="px-4 py-3">
+      <p className="text-xs text-gray-500">{label}</p>
+      <p className="text-xl font-bold text-gray-800 mt-0.5">
+        {value === null ? "-" : value.toLocaleString()}
+        <span className="text-xs font-normal text-gray-400 ml-1">{unit}</span>
+      </p>
+      {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
+    </div>
+  )
+}
+
 export default function DashboardPage() {
   const router = useRouter()
   const [myUserId, setMyUserId] = useState<string | null>(null)
@@ -121,15 +150,20 @@ export default function DashboardPage() {
   const [pendingShopOrders, setPendingShopOrders] = useState<PendingShopOrder[]>([])
   const [loadingShopOrders, setLoadingShopOrders] = useState(true)
 
+  const [siteLoginStats, setSiteLoginStats] = useState<SiteLoginStats | null>(null)
+  const [loadingSiteStats, setLoadingSiteStats] = useState(true)
+  const [accessStats, setAccessStats] = useState<AccessStats | null>(null)
+  const [loadingAccessStats, setLoadingAccessStats] = useState(true)
+
   useEffect(() => {
     init()
   }, [])
 
   const init = async () => {
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user?.email) { setLoadingReplies(false); setLoadingAnnouncements(false); setLoadingNews(false); setLoadingBirthdays(false); setLoadingReviews(false); setLoadingSummary(false); setLoadingShopOrders(false); return }
+    if (!user?.email) { setLoadingReplies(false); setLoadingAnnouncements(false); setLoadingNews(false); setLoadingBirthdays(false); setLoadingReviews(false); setLoadingSummary(false); setLoadingShopOrders(false); setLoadingSiteStats(false); setLoadingAccessStats(false); return }
     const t = EMAIL_TO_TEACHER[user.email]
-    if (!t) { setLoadingReplies(false); setLoadingAnnouncements(false); setLoadingNews(false); setLoadingBirthdays(false); setLoadingReviews(false); setLoadingSummary(false); setLoadingShopOrders(false); return }
+    if (!t) { setLoadingReplies(false); setLoadingAnnouncements(false); setLoadingNews(false); setLoadingBirthdays(false); setLoadingReviews(false); setLoadingSummary(false); setLoadingShopOrders(false); setLoadingSiteStats(false); setLoadingAccessStats(false); return }
     setMyUserId(user.id)
     setTeacherId(t.id)
     setTeacherName(t.name)
@@ -144,7 +178,34 @@ export default function DashboardPage() {
       fetchMonthSummary(t.id),
       fetchMonthShopSummary(t.id),
       fetchPendingShopOrders(t.id),
+      fetchSiteLoginStats(),
+      fetchAccessStats(),
     ])
+  }
+
+  const fetchSiteLoginStats = async () => {
+    const { data, error } = await supabase.rpc("get_site_login_stats").single()
+    if (!error && data) {
+      setSiteLoginStats(data as SiteLoginStats)
+    }
+    setLoadingSiteStats(false)
+  }
+
+  const fetchAccessStats = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) {
+        const res = await fetch("/api/admin/dashboard-analytics", {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        })
+        if (res.ok) {
+          setAccessStats(await res.json())
+        }
+      }
+    } catch {
+      // 取得できない場合は「-」表示のまま
+    }
+    setLoadingAccessStats(false)
   }
 
   const fetchUnreadReplies = async (myTeacherId: string) => {
@@ -406,6 +467,33 @@ export default function DashboardPage() {
           )}
         </div>
       )}
+
+      {/* アクセス・ログイン（月ごと） */}
+      <div className="border rounded-lg bg-white overflow-hidden max-w-4xl mb-4">
+        <div className="px-4 py-3 bg-gray-50 border-b">
+          <h2 className="font-bold text-sm">{new Date().getMonth() + 1}月のアクセス・ログイン</h2>
+        </div>
+        {(loadingSiteStats || loadingAccessStats) ? (
+          <div className="p-4 text-sm text-gray-400">読み込み中...</div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-3 divide-x border-b">
+              <StatTile label="新規ログイン数" value={siteLoginStats?.new_users ?? null} unit="人" sub="今月はじめてログイン" />
+              <StatTile label="今月ログインした人数" value={siteLoginStats?.logged_in_users ?? null} unit="人" sub="今月1回以上ログイン" />
+              <StatTile label="全体ログイン数（累計）" value={siteLoginStats?.total_users ?? null} unit="人" sub="これまでの登録者合計" />
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 divide-x">
+              <StatTile label="TOPページ 訪問者数" value={accessStats?.top.visitors ?? null} unit="人" />
+              <StatTile label="TOPページ 閲覧数" value={accessStats?.top.pageviews ?? null} unit="PV" />
+              <StatTile label="サイト全体 訪問者数" value={accessStats?.site.visitors ?? null} unit="人" />
+              <StatTile label="サイト全体 閲覧数" value={accessStats?.site.pageviews ?? null} unit="PV" />
+            </div>
+            <p className="px-4 py-2 text-xs text-gray-400 border-t">
+              ※アクセス数はVercel Analytics（計測開始日以降・本番のみ）。ログイン人数はSupabase認証の記録です。
+            </p>
+          </>
+        )}
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl">
 
